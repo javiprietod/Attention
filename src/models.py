@@ -175,14 +175,13 @@ class EncoderModel(torch.nn.Module):
         x += self.positional_encodings(x)
 
         for _ in range(self.encoders):
-            # attention_x = self.self_attention(x, inputs==len(self.vocab_to_int) - 1)
-            attention_x = self.sparse_attention(x, x, x)
+            attention_x = self.self_attention(x, inputs==len(self.vocab_to_int) - 1)
 
-            x = x + self.dropout(attention_x)
+            x = self.dropout(attention_x) + x
 
-            normed_x = self.normalization(x)
+            x = self.normalization(x)
 
-            x = self.fc(normed_x)
+            x = self.fc(x) + x
 
             x = self.normalization(x)
 

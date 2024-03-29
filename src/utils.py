@@ -189,8 +189,7 @@ def load_text_data(
 
         # URL of the Google Sheet for direct download as an CSV file
         sheet_url = """
-        https://docs.google.com/spreadsheets/d/1JY0Mfh6zxR1q7gcP4Qht4LuOEMxLhghZZxx7BHgcRLQ/export?format=csv
-        """
+        https://docs.google.com/spreadsheets/d/1JY0Mfh6zxR1q7gcP4Qht4LuOEMxLhghZZxx7BHgcRLQ/export?format=csv"""
 
         # Specify the path where you want to save the file
         output_path = f"{path}/data.csv"
