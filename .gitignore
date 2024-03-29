@@ -9,6 +9,14 @@ __pycache__/
 # Debugging
 .vscode
 
+# Code and models
+runs/
+models/
+nohup.out
+
+# Data
+data/
+
 # Distribution / packaging
 .Python
 build/
