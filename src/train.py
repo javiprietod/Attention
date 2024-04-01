@@ -7,13 +7,13 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm  # type: ignore
 
 # own modules
-from src.models import EncoderModel
+from src.models import EncoderModel, PytorchModel
 from src.utils import (
     load_text_data,
     save_model,
     set_seed,
 )
-from src.train_functions import train_step, val_step
+from src.train_functions import train_step, val_step, test_step
 
 # set device
 device: torch.device = (
@@ -37,10 +37,11 @@ def main() -> None:
 
     # TODO
     epochs: int = 15
-    lr: float = 8e-4
+    lr: float = 6e-4
     batch_size: int = 16
-    hidden_sizes: tuple[int, ...] = (128,)  # 256 128
-    encoders: int = 1
+    hidden_size: int = 1024
+    embedding_dim: int = 128
+    encoders: int = 2
     nhead: int = 4
 
     # empty nohup file
@@ -49,21 +50,22 @@ def main() -> None:
     # load data
     train_data: DataLoader
     val_data: DataLoader
-    train_data, val_data, _, vocab_to_int, _, _, _ = load_text_data(
+    train_data, val_data, test_data, vocab_to_int, _, _, int_to_target = load_text_data(
         DATA_PATH, batch_size=batch_size
     )
 
     # define name and writer
-    name: str = f"model_{lr}_{batch_size}_{epochs}_{encoders}"
+    name: str = f"model_{lr}_{hidden_size}_{batch_size}_{epochs}_{encoders}"
     writer: SummaryWriter = SummaryWriter(f"runs/{name}")
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
     model: torch.nn.Module = EncoderModel(
-        hidden_sizes=hidden_sizes,
+        hidden_size=hidden_size,
         vocab_to_int=vocab_to_int,
         input_channels=inputs.shape[1],
         output_channels=NUMBER_OF_CLASSES,
+        embedding_dim=embedding_dim,
         encoders=encoders,
         nhead=nhead,
     ).to(device)
@@ -74,7 +76,7 @@ def main() -> None:
         model.parameters(), lr=lr, weight_decay=1e-4
     )
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=3, gamma=0.4, verbose=True
+        optimizer, step_size=12, gamma=0.4, verbose=True
     )
 
     # train loop
@@ -91,6 +93,8 @@ def main() -> None:
     # save model
     save_model(model, name)
 
+    print(test_step(model, test_data, device, int_to_target))
+    
     return None
 
 

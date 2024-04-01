@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 # own modules
-from src.utils import Accuracy
+from src.utils import Accuracy, print_confusion_matrix
 
 
 def train_step(
@@ -36,7 +36,6 @@ def train_step(
     model.train()
     accuracy = Accuracy()
 
-    # TODO
     for text, label in train_data:
         accuracy.reset()
         text = text.to(device)
@@ -79,12 +78,12 @@ def val_step(
         device: device of model.
     """
     model.eval()
+
     with torch.no_grad():
         # define metric lists
         losses: list[float] = []
         accuracies: list[float] = []
 
-        # TODO
         accuracy = Accuracy()
         for text, label in val_data:
             accuracy.reset()
@@ -109,6 +108,7 @@ def test_step(
     model: torch.nn.Module,
     test_data: DataLoader,
     device: torch.device,
+    int_to_target: dict[int, str],
 ) -> float:
     """
     This function computes the test step.
@@ -123,8 +123,9 @@ def test_step(
     """
     accuracies: list[float] = []
     accuracy = Accuracy()
+    confusion_matrix = torch.zeros((len(int_to_target), len(int_to_target)))
     model.eval()
-    # TODO
+
     with torch.no_grad():
         for text, label in test_data:
             text = text.to(device)
@@ -133,5 +134,11 @@ def test_step(
             outputs = model(text)
             accuracy.update(outputs, label)
             accuracies.append(accuracy.compute())
+            predictions = outputs.argmax(1).type_as(label)
+            for i in range(len(predictions)):
+                confusion_matrix[label[i]][predictions[i]] += 1
 
-        return np.mean(accuracies, dtype="float")
+    print(f"Confusion matrix:")
+    print_confusion_matrix(confusion_matrix, int_to_target)
+
+    return np.mean(accuracies, dtype="float")

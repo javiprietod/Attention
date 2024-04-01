@@ -33,7 +33,6 @@ class EmotionsDataset(Dataset):
             path: path of the dataset.
         """
 
-        # TODO
         super().__init__()
         self.path = path
         self.dataset = pd.read_csv(path)
@@ -53,7 +52,6 @@ class EmotionsDataset(Dataset):
             length of dataset.
         """
 
-        # TODO
         return len(self.dataset)
 
     def __getitem__(self, index: int) -> tuple[list[str], str]:
@@ -67,7 +65,6 @@ class EmotionsDataset(Dataset):
             tuple with text (already padded) and label.
         """
 
-        # TODO
         text = (
             [self.start_token]
             + self.dataset["Text"][index].lower().split()
@@ -93,7 +90,6 @@ def collate_fn(
     Returns:
         padded tensor.
     """
-    # TODO
     texts: tuple[list[str]]
     labels: tuple[str]
     texts, labels = list(zip(*batch))  # type: ignore
@@ -124,7 +120,6 @@ def create_lookup_tables(
             vocab_to_int: vocabulary to map words to integers.
             int_to_vocab: vocabulary to map integers to words.
     """
-    # TODO
     word_counts = Counter(words)
 
     sorted_vocab = sorted(word_counts, reverse=True)
@@ -311,6 +306,34 @@ class Accuracy:
         self.total = 0
 
         return None
+
+
+def print_confusion_matrix(
+    confusion_matrix: torch.Tensor,
+    int_to_target: dict[int, str],
+):
+    """
+    Code for printing the confusion matrix.
+
+    Args:
+        model: pytorch model.
+        val_data: dataloader of test data.
+        device: device of model.
+
+    """
+    line: str = ""
+    line += "\t\u0020"
+    for i in range(confusion_matrix.shape[0]):
+        line += "   " + int_to_target[i]
+    print(line)
+
+    for i in range(confusion_matrix.shape[0]):
+        line = ""
+        tabs = 1 if i == 3 else 2
+        line += int_to_target[i] + "\t" * tabs
+        for j in list(int(j.item()) for j in confusion_matrix[i]):
+            line += str(j) + "\t"
+        print(line)
 
 
 def save_model(model: torch.nn.Module, name: str) -> None:

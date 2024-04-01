@@ -27,12 +27,9 @@ def main(name: str) -> float:
     """
     This function is the main program for the testing.
     """
-
-    # TODO
-
     # load data
     test_data: DataLoader
-    _, _, test_data, _, _, _, _ = load_text_data(
+    _, _, test_data, _, _, _, int_to_target = load_text_data(
         DATA_PATH, batch_size=int(name.split("_")[-3])
     )
 
@@ -40,10 +37,10 @@ def main(name: str) -> float:
     model: RecursiveScriptModule = torch.jit.load(f"models/{name}.pt").to(device)
 
     # call test step and evaluate accuracy
-    accuracy: float = test_step(model, test_data, device)
+    accuracy: float = test_step(model, test_data, device, int_to_target)
 
     return accuracy
 
 
 if __name__ == "__main__":
-    print(f"accuracy: {main('model_0.0008_16_15_1')}")
+    print(f"accuracy: {main('model_0.0006_1024_16_15_2')}")
