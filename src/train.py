@@ -35,7 +35,6 @@ def main() -> None:
     This function is the main program for the training.
     """
 
-    # TODO
     epochs: int = 15
     lr: float = 6e-4
     batch_size: int = 16
@@ -94,7 +93,7 @@ def main() -> None:
     save_model(model, name)
 
     print(test_step(model, test_data, device, int_to_target))
-    
+
     return None
 
 

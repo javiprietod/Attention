@@ -45,7 +45,6 @@ class SelfAttention(torch.nn.Module):
             mask: mask tensor for padding values. Dimensions: [batch, sequence].
         """
 
-        # TODO
         super().__init__()
         self.num_heads = num_heads
         self.embedding_dim = embedding_dim
@@ -66,7 +65,6 @@ class SelfAttention(torch.nn.Module):
             output of the self attention module.
         """
 
-        # TODO
         q: torch.Tensor = self.q(x)
         k: torch.Tensor = self.k(x)
         v: torch.Tensor = self.v(x)
@@ -129,7 +127,6 @@ class EncoderModel(torch.nn.Module):
             input_channels: input channels of the model.
         """
 
-        # TODO
         super().__init__()
         self.vocab_to_int: dict[str, int] = vocab_to_int
 
@@ -179,7 +176,6 @@ class EncoderModel(torch.nn.Module):
             batch of logits. Dimensions: [batch, output_channels].
         """
 
-        # TODO
         x = self.embeddings(inputs)
         x = self.positional_encodings(x)
 
@@ -220,7 +216,6 @@ class PytorchModel(torch.nn.Module):
             input_channels: input channels of the model.
         """
 
-        # TODO
         super().__init__()
         self.vocab_to_int: dict[str, int] = vocab_to_int
 
@@ -263,7 +258,6 @@ class PytorchModel(torch.nn.Module):
             batch of logits. Dimensions: [batch, output_channels].
         """
 
-        # TODO
         x = self.embeddings(inputs)
         x += self.positional_encodings(x)
 
