@@ -2,20 +2,20 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.jit import RecursiveScriptModule
-import numpy as np
-import pandas as pd
 
 # other libraries
+import numpy as np
+import pandas as pd
+import re
 import os
 import random
 import requests
 from collections import Counter
 
 
-class EmotionsDataset(Dataset):
+class GeneralDataset(Dataset):
     """
-    This class is the Emotions Dataset.
-    https://www.kaggle.com/datasets/ishantjuyal/emotions-in-text
+    This class for general text datasets used in the project.
     """
 
     def __init__(
@@ -26,19 +26,26 @@ class EmotionsDataset(Dataset):
         end_token: str = "<e>",
         pad_token: str = "<p>",
     ) -> None:
-        """
-        Constructor of EmotionsDataset.
-
+        """ 
+        This is the constructor of the GeneralDataset class.
+        
         Args:
             path: path of the dataset.
+            vocab_to_int: vocabulary to map words to integers.
+            start_token: start token for the text.
+            end_token: end token for the text.
+            pad_token: padding token for the text.
         """
 
         super().__init__()
         self.path = path
         self.dataset = pd.read_csv(path)
-        self.max_len = (
-            max([len(text.split()) for text in self.dataset["Text"]]) + 2
-        )  # start and end tokens
+        self.text_column, self.label_column = list(self.dataset.columns)
+        lengths = sorted([len(text.split()) for text in self.dataset[self.text_column]])
+        self.max_len = max(
+            lengths[-1] + 2,  # start and end tokens
+            int(np.median(lengths)),
+        )
         self.vocab_to_int = vocab_to_int
         self.start_token = start_token
         self.end_token = end_token
@@ -53,6 +60,23 @@ class EmotionsDataset(Dataset):
         """
 
         return len(self.dataset)
+
+
+class EmotionsDataset(GeneralDataset):
+    """
+    This class is the Emotions Dataset.
+    https://www.kaggle.com/datasets/ishantjuyal/emotions-in-text
+    """
+
+    def __init__(
+        self,
+        path: str,
+        vocab_to_int: dict[str, int],
+        start_token: str = "<s>",
+        end_token: str = "<e>",
+        pad_token: str = "<p>",
+    ) -> None:
+        super().__init__(path, vocab_to_int, start_token, end_token, pad_token)
 
     def __getitem__(self, index: int) -> tuple[list[str], str]:
         """
@@ -71,7 +95,51 @@ class EmotionsDataset(Dataset):
             + [self.end_token]
         )
         text = [self.pad_token] * (self.max_len - len(text)) + text
-        label = self.dataset["Emotion"][index]
+        label = self.dataset[self.label_column][index]
+        return text, label
+
+
+class IMBDDataset(GeneralDataset):
+    """
+    This class is the IMDB reviews dataset.
+    https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews
+    """
+
+    def __init__(
+        self,
+        path: str,
+        vocab_to_int: dict[str, int],
+        start_token: str = "<s>",
+        end_token: str = "<e>",
+        pad_token: str = "<p>",
+    ) -> None:
+        super().__init__(path, vocab_to_int, start_token, end_token, pad_token)
+
+    def __getitem__(self, index: int) -> tuple[list[str], str]:
+        """
+        This method loads an item based on the index.
+
+        Args:
+            index: index of the element in the dataset.
+
+        Returns:
+            tuple with text (already padded) and label.
+        """
+
+        text = (
+            [self.start_token]
+            + [
+                word
+                for word in re.split(
+                    r"[\s.,]",
+                    self.dataset[self.text_column][index].lower().replace("<br />", ""),
+                )
+                if word != ""
+            ]
+            + [self.end_token]
+        )
+        text = [self.pad_token] * (self.max_len - len(text)) + text
+        label = self.dataset[self.label_column][index]
         return text, label
 
 
@@ -81,14 +149,15 @@ def collate_fn(
     target_to_int: dict[str, int],
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    This function pads a list of variable length tensors.
+    This function creates a batch of text and labels.
 
     Args:
-        batch: list of tensors to pad.
+        batch: list of tuples with text and labels.
         vocab_to_int: vocabulary to map words to integers.
+        target_to_int: vocabulary to map labels to integers.
 
-    Returns:
-        padded tensor.
+    Returns:    
+        tuple with text and labels encoded.
     """
     texts: tuple[list[str]]
     labels: tuple[str]
@@ -104,7 +173,7 @@ def collate_fn(
 
 
 def create_lookup_tables(
-    words: list[list[str]],
+    words: list[str],
     start_token: str = "<s>",
     end_token: str = "<e>",
     unk_token: str = "<p>",
@@ -125,7 +194,7 @@ def create_lookup_tables(
     sorted_vocab = sorted(word_counts, reverse=True)
 
     vocab_to_int: dict[str, int] = {
-        word: ii for ii, word in enumerate(sorted_vocab)  # type: ignore
+        word: ii for ii, word in enumerate(sorted_vocab) 
     }
     vocab_to_int[start_token] = len(vocab_to_int)
     vocab_to_int[end_token] = len(vocab_to_int)
@@ -176,35 +245,36 @@ def load_text_data(
     Returns:
         tuple of dataloaders, train, val and test in respective order.
     """
-
+    csv_path = f"{path}/data.csv"
     # download folders if they are not present
-    if not os.path.isdir(f"{path}"):
+    if not os.path.isfile(csv_path):
         # create main dir
-        os.makedirs(f"{path}")
+        os.makedirs(f"{path}", exist_ok=True)
 
         # URL of the Google Sheet for direct download as an CSV file
         sheet_url = """
         https://docs.google.com/spreadsheets/d/1JY0Mfh6zxR1q7gcP4Qht4LuOEMxLhghZZxx7BHgcRLQ/export?format=csv"""
 
         # Specify the path where you want to save the file
-        output_path = f"{path}/data.csv"
+        output_path = csv_path
 
         # Call the function with the URL and the desired output path
         download_google_sheet(sheet_url, output_path)
 
     # create lookup tables
-    dataset = pd.read_csv(f"{path}/data.csv")
-    words = [word for text in dataset["Text"] for word in text.lower().split()]
+    dataset = pd.read_csv(csv_path)
+    text_column, label_column = list(dataset.columns)
+    words = [word for text in dataset[text_column] for word in text.lower().split()]
     vocab_to_int, int_to_vocab = create_lookup_tables(
         words, start_token, end_token, pad_token
     )
-    targets: list[str] = list(dataset["Emotion"].unique())
+    targets: list[str] = list(dataset[label_column].unique())
     targets_to_int = {target: ii for ii, target in enumerate(targets)}
     int_to_targets = {ii: target for target, ii in targets_to_int.items()}
 
     # create datasets
     train_dataset: Dataset = EmotionsDataset(
-        f"{path}/data.csv", vocab_to_int, start_token, end_token, pad_token
+        csv_path, vocab_to_int, start_token, end_token, pad_token
     )
     val_dataset: Dataset
     test_dataset: Dataset
@@ -238,6 +308,89 @@ def load_text_data(
         train_dataloader,
         val_dataloader,
         test_dataloader,
+        vocab_to_int,
+        int_to_vocab,
+        targets_to_int,
+        int_to_targets,
+    )
+
+
+def load_benchmark_data(
+    path: str,
+    batch_size: int = 128,
+    percent: float = 1,
+    num_workers: int = 0,
+    start_token: str = "<s>",
+    end_token: str = "<e>",
+    pad_token: str = "<p>",
+) -> tuple[DataLoader, dict[str, int], dict[int, str], dict[str, int], dict[int, str],]:
+    """
+    This function returns two Dataloaders, one for train data and
+    other for validation data for text dataset.
+
+    Args:
+        path: path of the dataset.
+        batch_size: batch size for dataloaders. Default value: 128.and
+        num_workers: number of workers for loading data.
+            Default value: 0.
+
+    Returns:
+        tuple of dataloaders, train, val and test in respective order.
+    """
+    csv_path = f"{path}/benchmark.csv"
+    # download folders if they are not present
+    if not os.path.isfile(csv_path):
+        # create main dir
+        os.makedirs(f"{path}", exist_ok=True)
+
+        # URL of the Google Sheet for direct download as an CSV file
+        sheet_url = """
+        https://docs.google.com/spreadsheets/d/17nSlt_QKx-6e9tb5NKw8qGOZWSsqFaQqbJ7Aedm9ZhY/export?format=csv"""
+
+        # Specify the path where you want to save the file
+        output_path = csv_path
+
+        # Call the function with the URL and the desired output path
+        download_google_sheet(sheet_url, output_path)
+
+    # create lookup tables
+    dataset = pd.read_csv(csv_path)
+    text_column, label_column = list(dataset.columns)
+    words = [
+        word
+        for text in dataset[text_column]
+        for word in re.split(r"[\s.,]", text.lower().replace("<br />", ""))
+        if word != ""
+    ]
+    vocab_to_int, int_to_vocab = create_lookup_tables(
+        words, start_token, end_token, pad_token
+    )
+    targets: list[str] = list(dataset[label_column].unique())
+    targets_to_int = {target: ii for ii, target in enumerate(targets)}
+    int_to_targets = {ii: target for target, ii in targets_to_int.items()}
+
+    # create datasets
+    train_dataset: Dataset = IMBDDataset(
+        csv_path, vocab_to_int, start_token, end_token, pad_token
+    )
+
+    assert (
+        percent > 0 and percent < 1
+    ), "The percentage of train data must be between 0 and 1."
+
+    train_dataset, _ = random_split(train_dataset, [percent, 1 - percent])
+
+    # define dataloaders
+    train_dataloader: DataLoader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+    )
+
+    return (
+        train_dataloader,
         vocab_to_int,
         int_to_vocab,
         targets_to_int,
