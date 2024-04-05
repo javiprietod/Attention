@@ -26,9 +26,9 @@ class GeneralDataset(Dataset):
         end_token: str = "<e>",
         pad_token: str = "<p>",
     ) -> None:
-        """ 
+        """
         This is the constructor of the GeneralDataset class.
-        
+
         Args:
             path: path of the dataset.
             vocab_to_int: vocabulary to map words to integers.
@@ -156,7 +156,7 @@ def collate_fn(
         vocab_to_int: vocabulary to map words to integers.
         target_to_int: vocabulary to map labels to integers.
 
-    Returns:    
+    Returns:
         tuple with text and labels encoded.
     """
     texts: tuple[list[str]]
@@ -193,9 +193,7 @@ def create_lookup_tables(
 
     sorted_vocab = sorted(word_counts, reverse=True)
 
-    vocab_to_int: dict[str, int] = {
-        word: ii for ii, word in enumerate(sorted_vocab) 
-    }
+    vocab_to_int: dict[str, int] = {word: ii for ii, word in enumerate(sorted_vocab)}
     vocab_to_int[start_token] = len(vocab_to_int)
     vocab_to_int[end_token] = len(vocab_to_int)
     vocab_to_int[unk_token] = len(vocab_to_int)
