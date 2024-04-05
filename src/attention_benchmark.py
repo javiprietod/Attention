@@ -62,7 +62,7 @@ class AttentionModel(torch.nn.Module):
         return self.linear(x)
 
 
-def forward_pass(
+def train_pass(
     model: torch.nn.Module,
     train_data: DataLoader,
     optimizer: torch.optim.Optimizer,
@@ -87,23 +87,31 @@ def forward_pass(
         optimizer.step()
 
 
-@profile
-def benchmark(attention: torch.nn.Module) -> float:
+@torch.no_grad()
+def test_pass(
+    model: torch.nn.Module,
+    test_data: DataLoader,
+    device: torch.device,
+):
     """
-    This function is the benchmark for the attention models.
+    This function is used to perform a forward pass the model.
+    """
+    model.eval()
+
+    for text, label in tqdm(test_data):
+        text = text.to(device)
+        label = label.to(device)
+
+        outputs = model(text)
+
+
+@profile
+def train_benchmark(model: torch.nn.Module, data: DataLoader) -> float:
+    """
+    This function is the benchmark for the attention models in training
     """
 
     lr: float = 6e-4
-
-    # load data
-    data: DataLoader
-    data, vocab_to_int, _, _, _ = load_benchmark_data(
-        DATA_PATH,
-        batch_size=16,
-        percent=0.02,
-    )
-    inputs: torch.Tensor = next(iter(data))[0]
-    model = AttentionModel(attention, inputs.shape[1], vocab_to_int).to(device)
 
     # define loss and optimizer
     loss: torch.nn.Module = torch.nn.CrossEntropyLoss()
@@ -111,13 +119,61 @@ def benchmark(attention: torch.nn.Module) -> float:
         model.parameters(), lr=lr, weight_decay=1e-4
     )
 
-    s = perf_counter()
-    forward_pass(model, data, optimizer, loss, device)
-    return perf_counter() - s
+    s: float = perf_counter()
+    train_pass(model, data, optimizer, loss, device)
+    train: float = perf_counter() - s
+
+    return train
+
+
+@profile
+def test_benchmark(model: torch.nn.Module, data: DataLoader) -> float:
+    """
+    This function is the benchmark for the attention models in inference
+    """
+
+    s: float = perf_counter()
+    test_pass(model, data, device)
+    test: float = perf_counter() - s
+
+    return test
+
+
+def main(attention1: torch.nn.Module, attention2: torch.nn.Module) -> None:
+    """
+    This function is the main program for all the benchmarks
+    """
+
+    # load data
+    data: DataLoader
+    data, vocab_to_int, _, _, _ = load_benchmark_data(
+        DATA_PATH,
+        batch_size=16,
+        percent=0.005,
+    )
+    inputs: torch.Tensor = next(iter(data))[0]
+    model1 = AttentionModel(attention1, inputs.shape[1], vocab_to_int).to(device)
+    model2 = AttentionModel(attention2, inputs.shape[1], vocab_to_int).to(device)
+
+    train_time1 = train_benchmark(model1, data)
+    test_time1 = test_benchmark(model1, data)
+    train_time2 = train_benchmark(model2, data)
+    test_time2 = test_benchmark(model2, data)
+
+    model_name1 = attention1.__class__.__name__
+    model_name2 = attention2.__class__.__name__
+
+    print("-" * 50)
+    print(f"Train time for {model_name1}: {train_time1}")
+    print(f"Train time for {model_name2}: {train_time2}")
+    print("-" * 50)
+    print(f"Test time for {model_name1}: {test_time1}")
+    print(f"Test time for {model_name2}: {test_time2}")
+    print("-" * 50)
 
 
 if __name__ == "__main__":
-    time1 = benchmark(torch.nn.MultiheadAttention(EMBEDDING_DIM, 4))
-    time2 = benchmark(SelfAttention(EMBEDDING_DIM, 4))
-    print(f"Torch Attention: {time1}")
-    print(f"SelfAttention: {time2}")
+    main(
+        torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
+        SelfAttention(EMBEDDING_DIM, 4)
+    )
