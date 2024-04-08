@@ -140,7 +140,7 @@ class LinformerModel(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # Linformer self-attention
-        self.self_attention = LinformerSelfAttention(dim=embedding_dim, seq_len=68, k=256, heads=nhead)
+        self.self_attention = LinformerSelfAttention(dim=embedding_dim, heads=nhead)
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -177,7 +177,7 @@ class LinformerModel(torch.nn.Module):
         x = self.positional_encodings(x)
 
         for _ in range(self.encoders):
-            attention_x = self.self_attention(x, inputs == len(self.vocab_to_int) - 1)
+            attention_x = self.self_attention(x)
 
             x = self.normalization(attention_x)
 
