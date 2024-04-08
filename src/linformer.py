@@ -1,6 +1,8 @@
 import torch
 import math
 
+from src.models import PositionalEncoding
+
 
 def default(val, default_val):
     return val if val is not None else default_val
@@ -98,3 +100,91 @@ class LinformerSelfAttention(torch.nn.Module):
         out = out.transpose(1, 2).reshape(b, n, -1)
         return self.to_out(out)
 
+
+class LinformerModel(torch.nn.Module):
+    """
+    Model constructed used Block modules.
+    """
+
+    def __init__(
+        self,
+        hidden_size: int,
+        vocab_to_int: dict[str, int],
+        input_channels: int = 3,
+        output_channels: int = 6,
+        encoders: int = 6,
+        embedding_dim: int = 100,
+        nhead: int = 4,
+    ) -> None:
+        """
+        Constructor of the class CNNModel.
+
+        Args:
+            layers: output channel dimensions of the Blocks.
+            input_channels: input channels of the model.
+        """
+
+        super().__init__()
+        self.vocab_to_int: dict[str, int] = vocab_to_int
+
+        self.encoders: int = encoders
+
+        # Embeddings
+        self.embeddings = torch.nn.Embedding(
+            len(vocab_to_int), embedding_dim, len(vocab_to_int) - 1
+        )
+
+        self.positional_encodings = PositionalEncoding(embedding_dim)
+
+        # Normalization
+        self.normalization = torch.nn.LayerNorm(embedding_dim)
+
+        # Linformer self-attention
+        self.self_attention = LinformerSelfAttention(dim=embedding_dim, seq_len=68, k=256, heads=nhead)
+
+        # mlp
+        self.fc = torch.nn.Sequential(
+            torch.nn.Linear(embedding_dim, hidden_size),
+            torch.nn.Dropout(0.2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, embedding_dim),
+        )
+
+        # classification
+        self.model = torch.nn.Linear(embedding_dim * input_channels, output_channels)
+        self.mlp = torch.nn.Sequential(
+            torch.nn.LayerNorm(embedding_dim * input_channels),
+            torch.nn.Linear(embedding_dim * input_channels, hidden_size),
+            torch.nn.Dropout(0.2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, output_channels),
+        )
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        This method returns a batch of logits.
+        It is the output of the neural network.
+
+        Args:
+            inputs: batch of images.
+                Dimensions: [batch, channels, height, width].
+
+        Returns:
+            batch of logits. Dimensions: [batch, output_channels].
+        """
+
+        x = self.embeddings(inputs)
+        x = self.positional_encodings(x)
+
+        for _ in range(self.encoders):
+            attention_x = self.self_attention(x, inputs == len(self.vocab_to_int) - 1)
+
+            x = self.normalization(attention_x)
+
+            x = self.fc(x) + x
+
+            x = self.normalization(x)
+
+        x = x.view(x.size(0), -1)
+
+        return self.model(x)

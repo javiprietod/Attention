@@ -8,6 +8,8 @@ from tqdm.auto import tqdm  # type: ignore
 
 # own modules
 from src.models import EncoderModel, PytorchModel
+from src.linformer import LinformerModel
+
 from src.utils import (
     load_text_data,
     save_model,
@@ -59,13 +61,13 @@ def main() -> None:
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
-    model: torch.nn.Module = EncoderModel(
+    model: torch.nn.Module = LinformerModel(
         hidden_size=hidden_size,
         vocab_to_int=vocab_to_int,
         input_channels=inputs.shape[1],
         output_channels=NUMBER_OF_CLASSES,
-        embedding_dim=embedding_dim,
         encoders=encoders,
+        embedding_dim=embedding_dim,
         nhead=nhead,
     ).to(device)
 
