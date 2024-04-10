@@ -55,7 +55,8 @@ class LinformerSelfAttention(torch.nn.Module):
     def forward(self, x, context=None, **kwargs):
         b, n, d, d_h, h, k = *x.shape, self.dim_head, self.heads, self.k  # type: ignore
 
-        kv_len = n if context is None else context.shape[1]
+        # kv_len = n if context is None else context.shape[1]
+        kv_len = n
         assert (
             kv_len <= self.seq_len
         ), f"the sequence length of the key / values must be {self.seq_len} - {kv_len} given"
@@ -64,7 +65,8 @@ class LinformerSelfAttention(torch.nn.Module):
 
         proj_seq_len = lambda args: torch.einsum("bnd,nk->bkd", *args)
 
-        kv_input = x if context is None else context
+        # kv_input = x if context is None else context
+        kv_input = x
 
         keys = self.to_k(kv_input)
         values = self.to_v(kv_input) if not self.share_kv else keys

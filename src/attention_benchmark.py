@@ -12,6 +12,7 @@ from src.utils import (
     set_seed,
 )
 from src.models import SelfAttention, PositionalEncoding
+from src.linformer import LinformerSelfAttention
 
 # set device
 device: torch.device = (
@@ -52,10 +53,10 @@ class AttentionModel(torch.nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.base_model(inputs)
         try:
-            x = self.attention(x, inputs == len(self.vocab_to_int) - 1)
+            x = self.attention(x)
         except:
             try:
-                x = self.attention(x)
+                x = self.attention(x, inputs == len(self.vocab_to_int) - 1)
             except:
                 x, _ = self.attention(x, x, x)
         x = x.view(x.size(0), -1)
@@ -173,7 +174,13 @@ def main(attention1: torch.nn.Module, attention2: torch.nn.Module) -> None:
 
 
 if __name__ == "__main__":
+    """
     main(
         torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
         SelfAttention(EMBEDDING_DIM, 4)
+    )
+    """
+    main(
+        SelfAttention(EMBEDDING_DIM, 4), 
+        LinformerSelfAttention(EMBEDDING_DIM, 2472)
     )
