@@ -39,8 +39,8 @@ class SelfAttention(torch.nn.Module):
         Constructor of the class SelfAttention.
 
         Args:
-            input_channels: input channels of the module.
-            output_channels: output channels of the module.
+            sequence_length: input channels of the module.
+            num_classes: output channels of the module.
             num_heads: number of heads in the multi-head attention.
             mask: mask tensor for padding values. Dimensions: [batch, sequence].
         """
@@ -106,20 +106,21 @@ class EncoderModel(torch.nn.Module):
 
     def __init__(
         self,
-        hidden_size: int,
+        sequence_length: int,
         vocab_to_int: dict[str, int],
-        input_channels: int = 3,
-        output_channels: int = 6,
+        num_classes: int = 6,
+        hidden_size: int = 1024,
         encoders: int = 6,
         embedding_dim: int = 100,
-        nhead: int = 4,
+        num_heads: int = 4,
+        **kwargs,
     ) -> None:
         """
         Constructor of the class CNNModel.
 
         Args:
             layers: output channel dimensions of the Blocks.
-            input_channels: input channels of the model.
+            sequence_length: input channels of the model.
         """
 
         super().__init__()
@@ -138,7 +139,7 @@ class EncoderModel(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # self-attention
-        self.self_attention = SelfAttention(embedding_dim, nhead)
+        self.self_attention = SelfAttention(embedding_dim, num_heads)
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -149,13 +150,13 @@ class EncoderModel(torch.nn.Module):
         )
 
         # classification
-        self.model = torch.nn.Linear(embedding_dim * input_channels, output_channels)
+        self.model = torch.nn.Linear(embedding_dim * sequence_length, num_classes)
         self.mlp = torch.nn.Sequential(
-            torch.nn.LayerNorm(embedding_dim * input_channels),
-            torch.nn.Linear(embedding_dim * input_channels, hidden_size),
+            torch.nn.LayerNorm(embedding_dim * sequence_length),
+            torch.nn.Linear(embedding_dim * sequence_length, hidden_size),
             torch.nn.Dropout(0.2),
             torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, output_channels),
+            torch.nn.Linear(hidden_size, num_classes),
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -168,7 +169,7 @@ class EncoderModel(torch.nn.Module):
                 Dimensions: [batch, channels, height, width].
 
         Returns:
-            batch of logits. Dimensions: [batch, output_channels].
+            batch of logits. Dimensions: [batch, num_classes].
         """
 
         x = self.embeddings(inputs)
