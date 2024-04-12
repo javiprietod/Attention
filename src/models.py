@@ -53,7 +53,7 @@ class SelfAttention(torch.nn.Module):
         self.k = torch.nn.Linear(embedding_dim, embedding_dim)
         self.v = torch.nn.Linear(embedding_dim, embedding_dim)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         This method returns the output of the self attention module.
 
@@ -86,11 +86,6 @@ class SelfAttention(torch.nn.Module):
         attention = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(
             self.embedding_dim // self.num_heads
         )
-
-        if mask is not None:
-            attention = attention.masked_fill(
-                mask.unsqueeze(1).unsqueeze(2), float("-inf")
-            )
 
         attention = F.softmax(attention, dim=-1)
 
@@ -192,77 +187,3 @@ class EncoderModel(torch.nn.Module):
 
         return self.model(x)
 
-
-class PytorchModel(torch.nn.Module):
-    """
-    Model constructed used Block modules.
-    """
-
-    def __init__(
-        self,
-        hidden_size: int,
-        vocab_to_int: dict[str, int],
-        input_channels: int = 3,
-        output_channels: int = 6,
-        encoders: int = 6,
-        embedding_dim: int = 100,
-        nhead: int = 4,
-    ) -> None:
-        """
-        Constructor of the class CNNModel.
-
-        Args:
-            layers: output channel dimensions of the Blocks.
-            input_channels: input channels of the model.
-        """
-
-        super().__init__()
-        self.vocab_to_int: dict[str, int] = vocab_to_int
-
-        self.encoders: int = encoders
-
-        # Embeddings
-        self.embeddings = torch.nn.Embedding(
-            len(vocab_to_int), embedding_dim, len(vocab_to_int) - 1
-        )
-
-        self.positional_encodings = PositionalEncoding(embedding_dim)
-
-        encoder_layers = torch.nn.TransformerEncoderLayer(
-            embedding_dim,
-            nhead,
-            hidden_size,
-            0.2,
-            batch_first=True,
-            norm_first=False,
-            activation="relu",
-        )
-        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layers, 6)
-
-        # dropout
-        self.dropout = torch.nn.Dropout(0.2)
-
-        # classification
-        self.model = torch.nn.Linear(embedding_dim * input_channels, output_channels)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
-        Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
-
-        Returns:
-            batch of logits. Dimensions: [batch, output_channels].
-        """
-
-        x = self.embeddings(inputs)
-        x += self.positional_encodings(x)
-
-        x = self.transformer_encoder(x)
-
-        x = x.view(x.size(0), -1)
-
-        return self.model(x)

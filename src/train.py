@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm  # type: ignore
 
 # own modules
-from src.models import EncoderModel, PytorchModel
+from src.models import EncoderModel
 from src.utils import (
     load_text_data,
     save_model,
