@@ -50,13 +50,11 @@ def main(model_name: str) -> None:
     )
 
     # define name and writer
-    name: str = f"model_\
-        {params['lr']}_\
-        {params['hidden_size']}_\
-        {params['batch_size']}_\
-        {params['epochs']}_\
-        {params['encoders']}"
-    writer: SummaryWriter = SummaryWriter(f"runs/{name}")
+    name: str = (
+        f"model_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
+        f"_encoders_{params['encoders']}_embedding_{params['embedding_dim']}_heads_{params['num_heads']}"
+    )
+    writer: SummaryWriter = SummaryWriter(f"runs/{model_name}/{name}")
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
