@@ -5,7 +5,6 @@ from src.models import PositionalEncoding
 from torch.nn.functional import normalize
 
 
-
 def default(val, default_val):
     return val if val is not None else default_val
 
@@ -26,7 +25,7 @@ class LinformerSelfAttention(torch.nn.Module):
         self.k = k
         self.heads = heads
         self.dim_head = (dim // heads) if dim_head is None else dim_head
-        self.sigma = 1 / (2 ** self.seq_len)
+        self.sigma = 1 / (2**self.seq_len)
 
         # Matrices de proyección no entrenables E y F
         R = torch.randn((self.seq_len, self.k)) / math.sqrt(self.k)
@@ -36,8 +35,8 @@ class LinformerSelfAttention(torch.nn.Module):
         sigma_tensor = torch.full((1,), self.sigma, dtype=R.dtype, device=R.device)
 
         # E y F como atributos constantes
-        self.register_buffer('E', sigma_tensor * R)
-        self.register_buffer('F', torch.exp(-sigma_tensor) * R)
+        self.register_buffer("E", sigma_tensor * R)
+        self.register_buffer("F", torch.exp(-sigma_tensor) * R)
 
         # Inicializar las capas lineales para Q, K, V
         self.to_q = torch.nn.Linear(dim, self.dim_head * heads, bias=False)
@@ -50,14 +49,18 @@ class LinformerSelfAttention(torch.nn.Module):
         # Dropout
         self.dropout = torch.nn.Dropout(dropout)
 
-    def forward(self, x):
-        # b, n, _, _ = *x.shape, self.dim_head, self.heads
-        b, n, d, d_h, h, k = *x.shape, self.dim_head, self.heads, self.k  # type: ignore
+    def forward(self, x: torch.Tensor):
+        # b, n, _, _ = *x.shape, self.dim_head, self.heads
+        (
+            b,
+            n,
+            d,
+        ) = x.shape
 
         # Pasar a través de las capas lineales Q, K, V
-        q = self.to_q(x)
-        k = self.to_k(x)
-        v = self.to_v(x)
+        q: torch.Tensor = self.to_q(x)
+        k: torch.Tensor = self.to_k(x)
+        v: torch.Tensor = self.to_v(x)
 
         # Redimensionar Q, K, V
         q = q.reshape(b, n, self.heads, self.dim_head).transpose(1, 2)
@@ -65,18 +68,18 @@ class LinformerSelfAttention(torch.nn.Module):
         v = v.reshape(b, n, self.heads, self.dim_head).transpose(1, 2)
 
         # Proyección de K y V
-        k = torch.einsum('bhnd,nk->bhkd', k, self.E)
-        v = torch.einsum('bhnd,nk->bhkd', v, self.F)
+        k = torch.einsum("bhnd,nk->bhkd", k, self.E)
+        v = torch.einsum("bhnd,nk->bhkd", v, self.F)
 
         # Cálculo de atención
-        attn_score = torch.matmul(q, k.transpose(-2, -1)) * (self.dim_head ** -0.5)
+        attn_score = torch.matmul(q, k.transpose(-2, -1)) * (self.dim_head**-0.5)
         attn_prob = torch.softmax(attn_score, dim=-1)
         attn_out = torch.matmul(attn_prob, v)
 
         # Fusionar cabezas
         attn_out = attn_out.transpose(1, 2).reshape(b, n, self.heads * self.dim_head)
         attn_out = self.to_out(attn_out)
-        
+
         return attn_out
 
 
@@ -87,20 +90,21 @@ class LinformerModel(torch.nn.Module):
 
     def __init__(
         self,
-        hidden_size: int,
+        sequence_length: int,
         vocab_to_int: dict[str, int],
-        input_channels: int = 3,
-        output_channels: int = 6,
+        num_classes: int = 6,
+        hidden_size: int = 1024,
         encoders: int = 6,
         embedding_dim: int = 100,
-        nhead: int = 4,
+        num_heads: int = 4,
+        **kwargs,
     ) -> None:
         """
         Constructor of the class CNNModel.
 
         Args:
             layers: output channel dimensions of the Blocks.
-            input_channels: input channels of the model.
+            sequence_length: input channels of the model.
         """
 
         super().__init__()
@@ -119,7 +123,7 @@ class LinformerModel(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # Linformer self-attention
-        self.self_attention = LinformerSelfAttention(dim=embedding_dim, heads=nhead)
+        self.self_attention = LinformerSelfAttention(dim=embedding_dim, heads=num_heads)
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -130,13 +134,13 @@ class LinformerModel(torch.nn.Module):
         )
 
         # classification
-        self.model = torch.nn.Linear(embedding_dim * input_channels, output_channels)
+        self.model = torch.nn.Linear(embedding_dim * sequence_length, num_classes)
         self.mlp = torch.nn.Sequential(
-            torch.nn.LayerNorm(embedding_dim * input_channels),
-            torch.nn.Linear(embedding_dim * input_channels, hidden_size),
+            torch.nn.LayerNorm(embedding_dim * sequence_length),
+            torch.nn.Linear(embedding_dim * sequence_length, hidden_size),
             torch.nn.Dropout(0.2),
             torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, output_channels),
+            torch.nn.Linear(hidden_size, num_classes),
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -149,7 +153,7 @@ class LinformerModel(torch.nn.Module):
                 Dimensions: [batch, channels, height, width].
 
         Returns:
-            batch of logits. Dimensions: [batch, output_channels].
+            batch of logits. Dimensions: [batch, num_classes].
         """
 
         x = self.embeddings(inputs)

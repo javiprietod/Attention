@@ -12,7 +12,7 @@ from src.utils import (
     set_seed,
 )
 from src.models import SelfAttention, PositionalEncoding
-from src.linformer2 import LinformerSelfAttention
+from src.models.linformer2 import LinformerSelfAttention
 
 # set device
 """
@@ -23,8 +23,7 @@ device: torch.device = (
 )
 """
 device: torch.device = (
-    torch.device("cuda") if torch.cuda.is_available() 
-    else torch.device("cpu")
+    torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 )
 
 # set all seeds and set number of threads

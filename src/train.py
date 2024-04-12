@@ -8,7 +8,7 @@ from tqdm.auto import tqdm  # type: ignore
 import json
 
 # own modules
-from src.models import EncoderModel
+from src.models import EncoderModel, LinformerModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -58,7 +58,7 @@ def main(model_name: str) -> None:
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
-    model: torch.nn.Module = EncoderModel(
+    model: torch.nn.Module = eval(model_name)(
         sequence_length=inputs.shape[1],
         vocab_to_int=vocab_to_int,
         num_classes=NUMBER_OF_CLASSES,
@@ -94,4 +94,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main("EncoderModel")
+    main("LinformerModel")
