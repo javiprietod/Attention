@@ -46,11 +46,16 @@ def main(model_name: str) -> None:
     train_data: DataLoader
     val_data: DataLoader
     train_data, val_data, test_data, vocab_to_int, _, _, int_to_target = load_text_data(
-        DATA_PATH, batch_size=params['batch_size']
+        DATA_PATH, batch_size=params["batch_size"]
     )
 
     # define name and writer
-    name: str = f"model_{params['lr']}_{params['hidden_size']}_{params['batch_size']}_{params['epochs']}_{params['encoders']}"
+    name: str = f"model_\
+        {params['lr']}_\
+        {params['hidden_size']}_\
+        {params['batch_size']}_\
+        {params['epochs']}_\
+        {params['encoders']}"
     writer: SummaryWriter = SummaryWriter(f"runs/{name}")
 
     # define model
@@ -65,14 +70,14 @@ def main(model_name: str) -> None:
     # define loss and optimizer
     loss: torch.nn.Module = torch.nn.CrossEntropyLoss()
     optimizer: torch.optim.Optimizer = torch.optim.Adam(
-        model.parameters(), lr=params['lr'], weight_decay=params['weight_decay']
+        model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"]
     )
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=params['step_size'], gamma=params['gamma'], verbose=True
+        optimizer, step_size=params["step_size"], gamma=params["gamma"], verbose=True
     )
 
     # train loop
-    for epoch in tqdm(range(params['epochs'])):
+    for epoch in tqdm(range(params["epochs"])):
         # call train step
         train_step(model, train_data, loss, optimizer, writer, epoch, device)
 
@@ -91,4 +96,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main('EncoderModel')
+    main("EncoderModel")
