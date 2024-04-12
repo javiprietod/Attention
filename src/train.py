@@ -89,10 +89,10 @@ def main() -> None:
         # step scheduler
         scheduler.step()
 
+    print(test_step(model, test_data, device, int_to_target))
+
     # save model
     save_model(model, name)
-
-    print(test_step(model, test_data, device, int_to_target))
 
     return None
 
