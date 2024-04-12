@@ -11,7 +11,7 @@ __pycache__/
 
 # Code and models
 runs/
-models/
+/models/
 nohup.out
 
 # Data
