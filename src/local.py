@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 from src.models import PositionalEncoding
 
 
-class LocalSelfAttention(nn.Module):
+class LocalAttention(nn.Module):
     """
     Local self attention module.
     """
@@ -65,15 +64,20 @@ class LocalSelfAttention(nn.Module):
             batch_size,
             self.num_heads,
             sequence_length,
+            1,
             sequence_length,
             device=x.device,
         )
 
-        # Calculate attention scores only for local positions
-        for i in range(self.window_size):
-            attention_scores[:, :, :, i] = torch.einsum(
-                "bhlc,bhlc->bhl", q[:, :, :, i:], k[:, :, :, i:]
-            )
+        k = k.transpose(-2, -1)
+        q = q.unsqueeze(3)
+
+        for i in range(sequence_length):
+            start = max(0, i - self.window_size)
+            end = min(sequence_length, i + self.window_size)
+            attention_scores[:, :, i, :, start:end] = torch.matmul(q[:,:,i,:,:], k[:, :, :, start:end])
+
+        attention_scores = attention_scores.squeeze(3)
 
         # Normalize attention scores
         attention_scores = attention_scores * self.scale
@@ -92,98 +96,6 @@ class LocalSelfAttention(nn.Module):
         )
 
         return output
-
-
-class LocalModel(torch.nn.Module):
-    """
-    Model constructed used Block modules.
-    """
-
-    def __init__(
-        self,
-        hidden_size: int,
-        vocab_to_int: dict[str, int],
-        input_channels: int = 3,
-        output_channels: int = 6,
-        encoders: int = 6,
-        embedding_dim: int = 100,
-        nhead: int = 4,
-        window_size: int = 5,
-    ) -> None:
-        """
-        Constructor of the class CNNModel.
-
-        Args:
-            layers: output channel dimensions of the Blocks.
-            input_channels: input channels of the model.
-        """
-
-        super().__init__()
-        self.vocab_to_int: dict[str, int] = vocab_to_int
-
-        self.encoders: int = encoders
-
-        # Embeddings
-        self.embeddings = torch.nn.Embedding(
-            len(vocab_to_int), embedding_dim, len(vocab_to_int) - 1
-        )
-
-        self.positional_encodings = PositionalEncoding(embedding_dim)
-
-        # Normalization
-        self.normalization = torch.nn.LayerNorm(embedding_dim)
-
-        # self-attention
-        self.self_attention = LocalSelfAttentionUnFold(
-            embedding_dim, nhead, window_size
-        )
-
-        # mlp
-        self.fc = torch.nn.Sequential(
-            torch.nn.Linear(embedding_dim, hidden_size),
-            torch.nn.Dropout(0.2),
-            torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, embedding_dim),
-        )
-
-        # classification
-        self.model = torch.nn.Linear(embedding_dim * input_channels, output_channels)
-        self.mlp = torch.nn.Sequential(
-            torch.nn.LayerNorm(embedding_dim * input_channels),
-            torch.nn.Linear(embedding_dim * input_channels, hidden_size),
-            torch.nn.Dropout(0.2),
-            torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, output_channels),
-        )
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
-        Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
-
-        Returns:
-            batch of logits. Dimensions: [batch, output_channels].
-        """
-
-        x = self.embeddings(inputs)
-        x = self.positional_encodings(x)
-
-        for _ in range(self.encoders):
-            attention_x = self.self_attention(x)
-
-            x = self.normalization(attention_x)
-
-            x = self.fc(x) + x
-
-            x = self.normalization(x)
-
-        x = x.view(x.size(0), -1)
-
-        return self.model(x)
 
 
 class LocalSelfAttentionUnFold(nn.Module):
@@ -222,7 +134,7 @@ class LocalSelfAttentionUnFold(nn.Module):
 
         # Pad q, k, v unfolded tensors to have the same sequence length
         padding = (self.window_size - 1) // 2
-        q_padded = F.pad(q, (0, 0, padding, padding), "constant", 0)
+        q_padded = F.pad(q, (0, 0, padding, padding), "constant", 0.0)
 
         q_unfolded = q_padded.unfold(
             dimension=2, size=self.window_size, step=1
@@ -247,3 +159,95 @@ class LocalSelfAttentionUnFold(nn.Module):
         )
 
         return output
+
+
+class LocalModel(nn.Module):
+    """
+    Model constructed used Block modules.
+    """
+
+    def __init__(
+        self,
+        sequence_length: int,
+        vocab_to_int: dict[str, int],
+        hidden_size: int,
+        num_classes: int = 6,
+        embedding_dim: int = 100,
+        encoders: int = 6,
+        num_heads: int = 4,
+        window_size: int = 5,
+    ) -> None:
+        """
+        Constructor of the class CNNModel.
+
+        Args:
+            layers: output channel dimensions of the Blocks.
+            input_channels: input channels of the model.
+        """
+
+        super().__init__()
+        self.vocab_to_int: dict[str, int] = vocab_to_int
+
+        self.encoders: int = encoders
+
+        # Embeddings
+        self.embeddings = torch.nn.Embedding(
+            len(vocab_to_int), embedding_dim, len(vocab_to_int) - 1
+        )
+
+        self.positional_encodings = PositionalEncoding(embedding_dim)
+
+        # Normalization
+        self.normalization = torch.nn.LayerNorm(embedding_dim)
+
+        # self-attention
+        self.self_attention = LocalAttention(
+            embedding_dim, num_heads, window_size
+        )
+
+        # mlp
+        self.fc = torch.nn.Sequential(
+            torch.nn.Linear(embedding_dim, hidden_size),
+            torch.nn.Dropout(0.2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, embedding_dim),
+        )
+
+        # classification
+        self.model = torch.nn.Linear(embedding_dim * sequence_length, num_classes)
+        self.mlp = torch.nn.Sequential(
+            torch.nn.LayerNorm(embedding_dim * sequence_length),
+            torch.nn.Linear(embedding_dim * sequence_length, hidden_size),
+            torch.nn.Dropout(0.2),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, num_classes),
+        )
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        This method returns a batch of logits.
+        It is the output of the neural network.
+
+        Args:
+            inputs: batch of images.
+                Dimensions: [batch, channels, height, width].
+
+        Returns:
+            batch of logits. Dimensions: [batch, output_channels].
+        """
+
+        x = self.embeddings(inputs)
+        x = self.positional_encodings(x)
+
+        for _ in range(self.encoders):
+            attention_x = self.self_attention(x)
+
+            x = self.normalization(attention_x)
+
+            x = self.fc(x) + x
+
+            x = self.normalization(x)
+
+        x = x.view(x.size(0), -1)
+
+        return self.model(x)
