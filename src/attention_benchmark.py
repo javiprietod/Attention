@@ -12,11 +12,19 @@ from src.utils import (
     set_seed,
 )
 from src.models import SelfAttention, PositionalEncoding
-from src.linformer import LinformerSelfAttention
+from src.linformer2 import LinformerSelfAttention
 
 # set device
+"""
 device: torch.device = (
-    torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    torch.device("mps") if torch.backends.mps.is_available() 
+    else torch.device("cuda") if torch.cuda.is_available() 
+    else torch.device("cpu")
+)
+"""
+device: torch.device = (
+    torch.device("cuda") if torch.cuda.is_available() 
+    else torch.device("cpu")
 )
 
 # set all seeds and set number of threads
@@ -52,6 +60,8 @@ class AttentionModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.base_model(inputs)
+        x = self.attention(x)
+        """
         try:
             x = self.attention(x)
         except:
@@ -59,6 +69,7 @@ class AttentionModel(torch.nn.Module):
                 x = self.attention(x, inputs == len(self.vocab_to_int) - 1)
             except:
                 x, _ = self.attention(x, x, x)
+        """
         x = x.view(x.size(0), -1)
         return self.linear(x)
 
@@ -181,6 +192,6 @@ if __name__ == "__main__":
     )
     """
     main(
+        LinformerSelfAttention(EMBEDDING_DIM, 2472),
         SelfAttention(EMBEDDING_DIM, 4), 
-        LinformerSelfAttention(EMBEDDING_DIM, 2472)
     )

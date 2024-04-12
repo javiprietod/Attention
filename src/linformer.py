@@ -38,35 +38,36 @@ class LinformerSelfAttention(torch.nn.Module):
         dim_head = default(dim_head, dim // heads)
         self.dim_head = dim_head
 
-        self.to_q = torch.nn.Linear(dim, dim_head * heads, bias=False)
+        self.to_q = torch.nn.Linear(dim, dim_head * heads, bias=False) # n -> dim_head * heads
 
         kv_dim = dim_head if one_kv_head else (dim_head * heads)
-        self.to_k = torch.nn.Linear(dim, kv_dim, bias=False)
-        self.proj_k = torch.nn.Parameter(init_(torch.zeros(seq_len, k)))
+        self.to_k = torch.nn.Linear(dim, kv_dim, bias=False) # n -> dim_head o dim_head*heads
+        self.proj_k = torch.nn.Parameter(init_(torch.zeros(seq_len, k))) # (n, k)
 
         self.share_kv = share_kv
         if not share_kv:
-            self.to_v = torch.nn.Linear(dim, kv_dim, bias=False)
-            self.proj_v = torch.nn.Parameter(init_(torch.zeros(seq_len, k)))
+            self.to_v = torch.nn.Linear(dim, kv_dim, bias=False) # n -> dim_head o dim_head*heads
+            self.proj_v = torch.nn.Parameter(init_(torch.zeros(seq_len, k))) # (n, k)
 
         self.dropout = torch.nn.Dropout(dropout)
-        self.to_out = torch.nn.Linear(dim_head * heads, dim)
+        self.to_out = torch.nn.Linear(dim_head * heads, dim) # dim_head * heads -> n
 
-    def forward(self, x, context=None, **kwargs):
+    def forward(self, x, context=None): 
+        # context is optional (for crossed attention)
         b, n, d, d_h, h, k = *x.shape, self.dim_head, self.heads, self.k  # type: ignore
+        # (batch, n(seq_len), d(dim_emb)) , d_h = dim_head, h = num_heads, k = proyected dim
 
-        # kv_len = n if context is None else context.shape[1]
-        kv_len = n
+        kv_len = n if context is None else context.shape[1]
         assert (
             kv_len <= self.seq_len
         ), f"the sequence length of the key / values must be {self.seq_len} - {kv_len} given"
 
         queries = self.to_q(x)
 
-        proj_seq_len = lambda args: torch.einsum("bnd,nk->bkd", *args)
+        # (batch, sequence (n), dim_embedding)*(batch, k(proyection de n))) -> (batch, k, dim_embedding)
+        proj_seq_len = lambda args: torch.einsum("bnd,nk->bkd", *args) # pasar de dim n -> k
 
-        # kv_input = x if context is None else context
-        kv_input = x
+        kv_input = x if context is None else context
 
         keys = self.to_k(kv_input)
         values = self.to_v(kv_input) if not self.share_kv else keys
@@ -74,29 +75,28 @@ class LinformerSelfAttention(torch.nn.Module):
         kv_projs = (self.proj_k, self.proj_v if not self.share_kv else self.proj_k)
 
         # allow for variable sequence lengths (less than maximum sequence length) by slicing projections
-
         if kv_len < self.seq_len:
             kv_projs = map(lambda t: t[:kv_len], kv_projs)
 
         # project keys and values along the sequence length dimension to k
-
         keys, values = map(proj_seq_len, zip((keys, values), kv_projs))
 
         # merge head into batch for queries and key / values
-
-        queries = queries.reshape(b, n, h, -1).transpose(1, 2)
+        queries = queries.reshape(b, n, h, -1).transpose(1, 2) # (b, h, n, dim_head * heads)
 
         merge_key_values = (
             lambda t: t.reshape(b, k, -1, d_h).transpose(1, 2).expand(-1, h, -1, -1)
         )
         keys, values = map(merge_key_values, (keys, values))
 
-        # attention
-
-        dots = torch.einsum("bhnd,bhkd->bhnk", queries, keys) * (d_h**-0.5)
+        # attention:
+        # Q (batch, head, n, dim) * K (batch, head, k, dim) -> (batch, head, n, k)
+        # dots = torch.einsum("bhnd,bhkd->bhnk", queries, keys) * (d_h**-0.5)
+        dots = torch.matmul(queries, keys.transpose(2,3)) * (d_h**-0.5)
         attn = dots.softmax(dim=-1)
         attn = self.dropout(attn)
-        out = torch.einsum("bhnk,bhkd->bhnd", attn, values)
+        # out = torch.einsum("bhnk,bhkd->bhnd", attn, values)
+        out = 
 
         # split heads
         out = out.transpose(1, 2).reshape(b, n, -1)

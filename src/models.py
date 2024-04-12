@@ -53,7 +53,7 @@ class SelfAttention(torch.nn.Module):
         self.k = torch.nn.Linear(embedding_dim, embedding_dim)
         self.v = torch.nn.Linear(embedding_dim, embedding_dim)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         This method returns the output of the self attention module.
 
@@ -86,11 +86,6 @@ class SelfAttention(torch.nn.Module):
         attention = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(
             self.embedding_dim // self.num_heads
         )
-
-        if mask is not None:
-            attention = attention.masked_fill(
-                mask.unsqueeze(1).unsqueeze(2), float("-inf")
-            )
 
         attention = F.softmax(attention, dim=-1)
 
