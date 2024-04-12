@@ -58,7 +58,7 @@ def main(model_name: str) -> None:
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
-    model: torch.nn.Module = EncoderModel(
+    model: torch.nn.Module = eval(model_name)(
         sequence_length=inputs.shape[1],
         vocab_to_int=vocab_to_int,
         num_classes=NUMBER_OF_CLASSES,
