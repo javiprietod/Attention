@@ -54,8 +54,9 @@ def train_step(
         accuracies.append(accuracy.compute())
 
     # write on tensorboard
-    writer.add_scalar("train/accuracy", np.mean(accuracies), epoch)
-    writer.add_scalar("train/loss", np.mean(losses), epoch)
+    if writer is not None:
+        writer.add_scalar("train/accuracy", np.mean(accuracies), epoch)
+        writer.add_scalar("train/loss", np.mean(losses), epoch)
 
 
 def val_step(
@@ -100,8 +101,9 @@ def val_step(
             f"Epoch: {epoch}, Loss: {np.mean(losses)}, Accuracy: {np.mean(accuracies)}"
         )
         # write on tensorboard
-        writer.add_scalar("val/accuracy", np.mean(accuracies), epoch)
-        writer.add_scalar("val/loss", np.mean(losses), epoch)
+        if writer is not None:
+            writer.add_scalar("val/accuracy", np.mean(accuracies), epoch)
+            writer.add_scalar("val/loss", np.mean(losses), epoch)
 
 
 def test_step(

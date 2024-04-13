@@ -8,6 +8,7 @@ from tqdm.auto import tqdm  # type: ignore
 
 # own modules
 from src.models import EncoderModel, PytorchModel
+from src.LSH import EncoderModelLSH
 from src.utils import (
     load_text_data,
     save_model,
@@ -35,13 +36,14 @@ def main() -> None:
     This function is the main program for the training.
     """
 
-    epochs: int = 15
+    epochs: int = 10
     lr: float = 6e-4
     batch_size: int = 16
-    hidden_size: int = 1024
+    hidden_size: int = 256
     embedding_dim: int = 128
     encoders: int = 2
     nhead: int = 4
+    n_buckets: int = 16
 
     # empty nohup file
     open("nohup.out", "w").close()
@@ -55,11 +57,11 @@ def main() -> None:
 
     # define name and writer
     name: str = f"model_{lr}_{hidden_size}_{batch_size}_{epochs}_{encoders}"
-    writer: SummaryWriter = SummaryWriter(f"runs/{name}")
-
+    # writer: SummaryWriter = SummaryWriter(f"runs/{name}")
+    writer = None
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
-    model: torch.nn.Module = EncoderModel(
+    model: torch.nn.Module = EncoderModelLSH(
         hidden_size=hidden_size,
         vocab_to_int=vocab_to_int,
         input_channels=inputs.shape[1],
@@ -67,6 +69,7 @@ def main() -> None:
         embedding_dim=embedding_dim,
         encoders=encoders,
         nhead=nhead,
+        n_buckets=n_buckets,
     ).to(device)
 
     # define loss and optimizer
