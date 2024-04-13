@@ -51,13 +51,7 @@ class AttentionModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.base_model(inputs)
-        try:
-            x = self.attention(x, inputs == len(self.vocab_to_int) - 1)
-        except:
-            try:
-                x = self.attention(x)
-            except:
-                x, _ = self.attention(x, x, x)
+        x = self.attention(x)
         x = x.view(x.size(0), -1)
         return self.linear(x)
 
@@ -139,18 +133,16 @@ def test_benchmark(model: torch.nn.Module, data: DataLoader) -> float:
     return test
 
 
-def main(attention1: torch.nn.Module, attention2: torch.nn.Module) -> None:
+def main(
+    attention1: torch.nn.Module,
+    attention2: torch.nn.Module,
+    data: DataLoader,
+    vocab_to_int: dict[str, int],
+) -> None:
     """
     This function is the main program for all the benchmarks
     """
 
-    # load data
-    data: DataLoader
-    data, vocab_to_int, _, _, _ = load_benchmark_data(
-        DATA_PATH,
-        batch_size=16,
-        percent=0.005,
-    )
     inputs: torch.Tensor = next(iter(data))[0]
     model1 = AttentionModel(attention1, inputs.shape[1], vocab_to_int).to(device)
     model2 = AttentionModel(attention2, inputs.shape[1], vocab_to_int).to(device)
@@ -173,7 +165,19 @@ def main(attention1: torch.nn.Module, attention2: torch.nn.Module) -> None:
 
 
 if __name__ == "__main__":
+    # load data
+    data: DataLoader
+    vocab_to_int: dict[str, int]
+    data, vocab_to_int, _, __, _ = load_benchmark_data(
+        DATA_PATH,
+        batch_size=16,
+        percent=0.005,
+    )
+    sequence_length: torch.Tensor = next(iter(data))[0][1]
+
     main(
+        SelfAttention(EMBEDDING_DIM, 4),
         torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
-        SelfAttention(EMBEDDING_DIM, 4)
+        data,
+        vocab_to_int,
     )

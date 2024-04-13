@@ -5,10 +5,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 # other libraries
 from tqdm.auto import tqdm  # type: ignore
+import json
 
 # own modules
-from src.models import EncoderModel, PytorchModel
-from src.LSH import EncoderModelLSH
+from src.models import EncoderModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -31,58 +31,51 @@ DATA_PATH: str = "data"
 NUMBER_OF_CLASSES: int = 6
 
 
-def main() -> None:
+def main(model_name: str) -> None:
     """
     This function is the main program for the training.
     """
 
-    epochs: int = 10
-    lr: float = 6e-4
-    batch_size: int = 16
-    hidden_size: int = 256
-    embedding_dim: int = 128
-    encoders: int = 2
-    nhead: int = 4
-    n_buckets: int = 16
-
     # empty nohup file
     open("nohup.out", "w").close()
+
+    with open("params.json", "r") as file:
+        params = json.load(file)[model_name]
 
     # load data
     train_data: DataLoader
     val_data: DataLoader
     train_data, val_data, test_data, vocab_to_int, _, _, int_to_target = load_text_data(
-        DATA_PATH, batch_size=batch_size
+        DATA_PATH, batch_size=params["batch_size"]
     )
 
     # define name and writer
-    name: str = f"model_{lr}_{hidden_size}_{batch_size}_{epochs}_{encoders}"
-    # writer: SummaryWriter = SummaryWriter(f"runs/{name}")
-    writer = None
+    name: str = (
+        f"model_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
+        f"_encoders_{params['encoders']}_embedding_{params['embedding_dim']}_heads_{params['num_heads']}"
+    )
+    writer: SummaryWriter = SummaryWriter(f"runs/{model_name}/{name}")
+
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
-    model: torch.nn.Module = EncoderModelLSH(
-        hidden_size=hidden_size,
+    model: torch.nn.Module = eval(model_name)(
+        sequence_length=inputs.shape[1],
         vocab_to_int=vocab_to_int,
-        input_channels=inputs.shape[1],
-        output_channels=NUMBER_OF_CLASSES,
-        embedding_dim=embedding_dim,
-        encoders=encoders,
-        nhead=nhead,
-        n_buckets=n_buckets,
+        num_classes=NUMBER_OF_CLASSES,
+        **params,
     ).to(device)
 
     # define loss and optimizer
     loss: torch.nn.Module = torch.nn.CrossEntropyLoss()
     optimizer: torch.optim.Optimizer = torch.optim.Adam(
-        model.parameters(), lr=lr, weight_decay=1e-4
+        model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"]
     )
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=12, gamma=0.4, verbose=True
+        optimizer, step_size=params["step_size"], gamma=params["gamma"], verbose=True
     )
 
     # train loop
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(params["epochs"])):
         # call train step
         train_step(model, train_data, loss, optimizer, writer, epoch, device)
 
@@ -92,13 +85,13 @@ def main() -> None:
         # step scheduler
         scheduler.step()
 
+    print(test_step(model, test_data, device, int_to_target))
+
     # save model
     save_model(model, name)
-
-    print(test_step(model, test_data, device, int_to_target))
 
     return None
 
 
 if __name__ == "__main__":
-    main()
+    main("EncoderModel")
