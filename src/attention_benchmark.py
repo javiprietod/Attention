@@ -181,11 +181,11 @@ if __name__ == "__main__":
         batch_size=16,
         percent=0.005,
     )
-    sequence_length: torch.Tensor = next(iter(data))[0][1]
+    sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
         SelfAttention(EMBEDDING_DIM, 4),
-        torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
+        LinformerSelfAttention(EMBEDDING_DIM, sequence_length, heads=4),
         data,
         vocab_to_int,
     )

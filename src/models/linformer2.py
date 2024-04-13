@@ -20,11 +20,12 @@ class LinformerSelfAttention(torch.nn.Module):
     def __init__(self, dim, seq_len=68, k=256, heads=8, dim_head=None, dropout=0.0):
         super().__init__()
         assert dim % heads == 0, "Dimension must be divisible by the number of heads."
-
+        self.eps = 1e-6
         self.seq_len = seq_len
         self.k = k
         self.heads = heads
         self.dim_head = (dim // heads) if dim_head is None else dim_head
+        print(self.k)
         self.sigma = 1 / (2**self.seq_len)
 
         # Matrices de proyección no entrenables E y F
@@ -112,6 +113,10 @@ class LinformerModel(torch.nn.Module):
 
         self.encoders: int = encoders
 
+        # k and eps
+        self.eps = 0.1
+        #k = int(9*math.log(embedding_dim)/(self.eps**2 - self.eps**3))
+        k = int(9*math.log(embedding_dim) / 0.9)
         # Embeddings
         self.embeddings = torch.nn.Embedding(
             len(vocab_to_int), embedding_dim, len(vocab_to_int) - 1
@@ -123,7 +128,7 @@ class LinformerModel(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # Linformer self-attention
-        self.self_attention = LinformerSelfAttention(dim=embedding_dim, heads=num_heads)
+        self.self_attention = LinformerSelfAttention(dim=embedding_dim, k=k, heads=num_heads)
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -162,11 +167,11 @@ class LinformerModel(torch.nn.Module):
         for _ in range(self.encoders):
             attention_x = self.self_attention(x)
 
-            x = self.normalization(attention_x)
+            x = self.normalization(attention_x) + x
 
-            x = self.fc(x) + x
+            fc_x = self.fc(x)
 
-            x = self.normalization(x)
+            x = self.normalization(fc_x) + x
 
         x = x.view(x.size(0), -1)
 

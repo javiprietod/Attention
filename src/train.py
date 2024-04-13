@@ -67,7 +67,7 @@ def main(model_name: str) -> None:
 
     # define loss and optimizer
     loss: torch.nn.Module = torch.nn.CrossEntropyLoss()
-    optimizer: torch.optim.Optimizer = torch.optim.Adam(
+    optimizer: torch.optim.Optimizer = torch.optim.AdamW(
         model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"]
     )
     scheduler = torch.optim.lr_scheduler.StepLR(
