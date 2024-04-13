@@ -8,7 +8,7 @@ from tqdm.auto import tqdm  # type: ignore
 import json
 
 # own modules
-from src.models import EncoderModel
+from src.models import EncoderModel, LocalModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -51,7 +51,7 @@ def main(model_name: str) -> None:
 
     # define name and writer
     name: str = (
-        f"model_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
+        f"{model_name}_model_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
         f"_encoders_{params['encoders']}_embedding_{params['embedding_dim']}_heads_{params['num_heads']}"
     )
     writer: SummaryWriter = SummaryWriter(f"runs/{model_name}/{name}")
@@ -94,4 +94,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main("EncoderModel")
+    main("LocalModel")

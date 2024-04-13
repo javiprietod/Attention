@@ -75,7 +75,9 @@ class LocalAttention(nn.Module):
         for i in range(sequence_length):
             start = max(0, i - self.window_size)
             end = min(sequence_length, i + self.window_size)
-            attention_scores[:, :, i, :, start:end] = torch.matmul(q[:,:,i,:,:], k[:, :, :, start:end])
+            attention_scores[:, :, i, :, start:end] = torch.matmul(
+                q[:, :, i, :, :], k[:, :, :, start:end]
+            )
 
         attention_scores = attention_scores.squeeze(3)
 
@@ -98,7 +100,7 @@ class LocalAttention(nn.Module):
         return output
 
 
-class LocalSelfAttentionUnFold(nn.Module):
+class LocalAttentionUnFold(nn.Module):
     def __init__(self, embedding_dim: int, num_heads: int, window_size: int) -> None:
         super().__init__()
         self.num_heads = num_heads
@@ -176,6 +178,7 @@ class LocalModel(nn.Module):
         encoders: int = 6,
         num_heads: int = 4,
         window_size: int = 5,
+        **kwargs
     ) -> None:
         """
         Constructor of the class CNNModel.
@@ -201,9 +204,7 @@ class LocalModel(nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # self-attention
-        self.self_attention = LocalAttention(
-            embedding_dim, num_heads, window_size
-        )
+        self.self_attention = LocalAttentionUnFold(embedding_dim, num_heads, window_size)
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -242,11 +243,11 @@ class LocalModel(nn.Module):
         for _ in range(self.encoders):
             attention_x = self.self_attention(x)
 
-            x = self.normalization(attention_x)
+            x = self.normalization(attention_x) + x
 
-            x = self.fc(x) + x
+            fc_x = self.fc(x)
 
-            x = self.normalization(x)
+            x = self.normalization(fc_x) + x
 
         x = x.view(x.size(0), -1)
 
