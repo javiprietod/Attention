@@ -121,14 +121,9 @@ class LocalAttentionUnFold(nn.Module):
         v: torch.Tensor = self.v(x)
 
         # Transform to Q, K, V
-        q = q.view(batch_size, sequence_length, self.num_heads, self.head_dim)
-        k = k.view(batch_size, sequence_length, self.num_heads, self.head_dim)
-        v = v.view(batch_size, sequence_length, self.num_heads, self.head_dim)
-
-        # Transpose to get dimensions batch_size, num_heads, sequence_length, head_dim
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
+        q = q.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+        k = k.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+        v = v.view(batch_size, self.num_heads, sequence_length, self.head_dim)
 
         # Use unfold to create sliding windows
         k_unfolded = k.unfold(dimension=2, size=self.window_size, step=1).contiguous()
@@ -152,6 +147,83 @@ class LocalAttentionUnFold(nn.Module):
 
         # Apply attention to the values
         output = torch.einsum("bnqk,bnkdh->bnqd", attn, v_unfolded)
+
+        # Combine heads
+        output = (
+            output.transpose(1, 2)
+            .contiguous()
+            .view(batch_size, sequence_length, self.embedding_dim)
+        )
+
+        return output
+
+
+class LocalAttentionUnFoldDef(nn.Module):
+    def __init__(
+        self, embedding_dim: int, num_heads: int, window_size: int, sequence_length: int
+    ) -> None:
+        super().__init__()
+        self.num_heads = num_heads
+        self.embedding_dim = embedding_dim
+        self.window_size = window_size
+        self.head_dim = embedding_dim // num_heads
+        self.scale = self.head_dim**-0.5
+        self.padding = (window_size - 1) // 2
+
+        self.q = nn.Linear(embedding_dim, embedding_dim)
+        self.k = nn.Linear(embedding_dim, embedding_dim)
+        self.v = nn.Linear(embedding_dim, embedding_dim)
+
+        self.i = torch.tensor(
+            [
+                [i for _ in range(-self.padding, self.padding + 1)]
+                for i in range(sequence_length)
+            ]
+        ).view(-1)
+        self.j = torch.tensor(
+            [
+                [j + i for j in range(-self.padding, self.padding + 1)]
+                for i in range(sequence_length)
+            ]
+        ).view(-1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size, sequence_length, _ = x.size()
+
+        q: torch.Tensor = self.q(x)
+        k: torch.Tensor = self.k(x)
+        v: torch.Tensor = self.v(x)
+
+        # Transform to Q, K, V
+        q = q.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+        k = k.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+        v = v.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+
+        # Pad q, k, v unfolded tensors to have the same sequence length
+
+        k_unf = F.pad(k, (0, 0, self.padding, self.padding), "constant", 0.0).unfold(
+            dimension=2, size=self.window_size, step=1
+        )
+
+        att = torch.einsum("...cde,...cd->...ce", k_unf, q)  # * self.scale
+
+        # Apply softmax
+        attn = F.softmax(att, dim=-1).view(att.shape[0], att.shape[1], -1)
+
+        qk = torch.empty(
+            att.shape[0],
+            att.shape[1],
+            att.shape[2],
+            att.shape[2] + self.padding * 2,
+            device=x.device,
+        )
+
+        qk[:, :, self.i, self.j] = attn.view(attn.shape[0], attn.shape[1], -1)
+
+        qk = qk[:, :, :, self.padding : -self.padding]
+
+        # Apply attention to the values
+        output = torch.matmul(qk, v)
 
         # Combine heads
         output = (
@@ -204,7 +276,9 @@ class LocalModel(nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # self-attention
-        self.self_attention = LocalAttentionUnFold(embedding_dim, num_heads, window_size)
+        self.self_attention = LocalAttentionUnFoldDef(
+            embedding_dim, num_heads, window_size, sequence_length
+        )
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -243,11 +317,11 @@ class LocalModel(nn.Module):
         for _ in range(self.encoders):
             attention_x = self.self_attention(x)
 
-            x = self.normalization(attention_x) + x
+            x = self.normalization(attention_x)
 
-            fc_x = self.fc(x)
+            x = self.fc(x) + x
 
-            x = self.normalization(fc_x) + x
+            x = self.normalization(x)
 
         x = x.view(x.size(0), -1)
 

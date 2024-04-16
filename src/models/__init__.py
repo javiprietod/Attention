@@ -1,2 +1,7 @@
 from src.models.base import EncoderModel, SelfAttention, PositionalEncoding
-from src.models.local import LocalAttention, LocalAttentionUnFold, LocalModel
+from src.models.local import (
+    LocalAttention,
+    LocalAttentionUnFold,
+    LocalModel,
+    LocalAttentionUnFoldDef,
+)

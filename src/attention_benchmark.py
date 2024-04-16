@@ -11,7 +11,13 @@ from src.utils import (
     load_benchmark_data,
     set_seed,
 )
-from src.models import SelfAttention, PositionalEncoding
+from src.models import (
+    SelfAttention,
+    PositionalEncoding,
+    LocalAttention,
+    LocalAttentionUnFold,
+    LocalAttentionUnFoldDef,
+)
 
 # set device
 device: torch.device = (
@@ -173,11 +179,11 @@ if __name__ == "__main__":
         batch_size=16,
         percent=0.005,
     )
-    sequence_length: torch.Tensor = next(iter(data))[0][1]
+    sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
-        SelfAttention(EMBEDDING_DIM, 4),
-        torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
+        LocalAttentionUnFoldDef(EMBEDDING_DIM, 4, 7, int(sequence_length)),
+        LocalAttentionUnFold(EMBEDDING_DIM, 4, 7),
         data,
         vocab_to_int,
     )
