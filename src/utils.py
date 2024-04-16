@@ -1,5 +1,6 @@
 # deep learning libraries
 import torch
+from torchtext.data import get_tokenizer # type: ignore
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.jit import RecursiveScriptModule
 
@@ -50,6 +51,7 @@ class GeneralDataset(Dataset):
         self.start_token = start_token
         self.end_token = end_token
         self.pad_token = pad_token
+        self.tokenizer = get_tokenizer("basic_english")
 
     def __len__(self) -> int:
         """
@@ -91,9 +93,9 @@ class EmotionsDataset(GeneralDataset):
 
         text = (
             [self.start_token]
-            + self.dataset["Text"][index].lower().split()
+            + self.tokenizer(self.dataset[self.text_column][index])
             + [self.end_token]
-        )
+        )[: self.max_len]
         text = [self.pad_token] * (self.max_len - len(text)) + text
         label = self.dataset[self.label_column][index]
         return text, label
@@ -128,16 +130,9 @@ class IMBDDataset(GeneralDataset):
 
         text = (
             [self.start_token]
-            + [
-                word
-                for word in re.split(
-                    r"[\s.,]",
-                    self.dataset[self.text_column][index].lower().replace("<br />", ""),
-                )
-                if word != ""
-            ]
+            + self.tokenizer(self.dataset[self.text_column][index].replace("<br />", ""))
             + [self.end_token]
-        )
+        )[: self.max_len]
         text = [self.pad_token] * (self.max_len - len(text)) + text
         label = self.dataset[self.label_column][index]
         return text, label
@@ -164,7 +159,7 @@ def collate_fn(
     texts, labels = list(zip(*batch))  # type: ignore
 
     # Encoding words and labels
-    texts_encoded = [[vocab_to_int[word] for word in text] for text in texts]
+    texts_encoded = [[vocab_to_int[word] if word in vocab_to_int else len(vocab_to_int) - 1 for word in text ] for text in texts]
     labels_encoded = [target_to_int[label] for label in labels]
 
     return torch.tensor(texts_encoded, dtype=torch.int), torch.tensor(
@@ -262,7 +257,7 @@ def load_text_data(
     # create lookup tables
     dataset = pd.read_csv(csv_path)
     text_column, label_column = list(dataset.columns)
-    words = [word for text in dataset[text_column] for word in text.lower().split()]
+    words = [word for text in dataset[text_column] for word in get_tokenizer("basic_english")(text)]
     vocab_to_int, int_to_vocab = create_lookup_tables(
         words, start_token, end_token, pad_token
     )
@@ -354,7 +349,8 @@ def load_benchmark_data(
     # create lookup tables
     dataset = pd.read_csv(csv_path)
     text_column, label_column = list(dataset.columns)
-    words = [
+    words = [word for text in dataset[text_column] for word in get_tokenizer("basic_english")(text.replace("<br />", ""))]
+    [
         word
         for text in dataset[text_column]
         for word in re.split(r"[\s.,]", text.lower().replace("<br />", ""))
@@ -389,6 +385,102 @@ def load_benchmark_data(
 
     return (
         train_dataloader,
+        vocab_to_int,
+        int_to_vocab,
+        targets_to_int,
+        int_to_targets,
+    )
+
+
+def load_benchmark_train_data(
+    path: str,
+    batch_size: int = 128,
+    num_workers: int = 0,
+    start_token: str = "<s>",
+    end_token: str = "<e>",
+    pad_token: str = "<p>",
+) -> tuple[DataLoader, DataLoader, DataLoader, dict[str, int], dict[int, str], dict[str, int], dict[int, str],]:
+    """
+    This function returns two Dataloaders, one for train data and
+    other for validation data for text dataset.
+
+    Args:
+        path: path of the dataset.
+        batch_size: batch size for dataloaders. Default value: 128.and
+        num_workers: number of workers for loading data.
+            Default value: 0.
+
+    Returns:
+        tuple of dataloaders, train, val and test in respective order.
+    """
+    csv_path = f"{path}/benchmark.csv"
+    # download folders if they are not present
+    if not os.path.isfile(csv_path):
+        # create main dir
+        os.makedirs(f"{path}", exist_ok=True)
+
+        # URL of the Google Sheet for direct download as an CSV file
+        sheet_url = """
+        https://docs.google.com/spreadsheets/d/17nSlt_QKx-6e9tb5NKw8qGOZWSsqFaQqbJ7Aedm9ZhY/export?format=csv"""
+
+        # Specify the path where you want to save the file
+        output_path = csv_path
+
+        # Call the function with the URL and the desired output path
+        download_google_sheet(sheet_url, output_path)
+
+    # create lookup tables
+    dataset = pd.read_csv(csv_path)
+    text_column, label_column = list(dataset.columns)
+    words = [
+        word
+        for text in dataset[text_column]
+        for word in re.split(r"[\s.,]", text.lower().replace("<br />", ""))
+        if word != ""
+    ]
+    vocab_to_int, int_to_vocab = create_lookup_tables(
+        words, start_token, end_token, pad_token
+    )
+    targets: list[str] = list(dataset[label_column].unique())
+    targets_to_int = {target: ii for ii, target in enumerate(targets)}
+    int_to_targets = {ii: target for target, ii in targets_to_int.items()}
+
+    # create datasets
+    train_dataset: Dataset = IMBDDataset(
+        csv_path, vocab_to_int, start_token, end_token, pad_token
+    )
+
+    val_dataset: Dataset
+    test_dataset: Dataset
+    train_dataset, test_dataset = random_split(train_dataset, [0.8, 0.2])
+    train_dataset, val_dataset = random_split(train_dataset, [0.75, 0.25])
+
+    # define dataloaders
+    train_dataloader: DataLoader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+    )
+    val_dataloader: DataLoader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+    )
+    test_dataloader: DataLoader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+    )
+    return (
+        train_dataloader,
+        val_dataloader,
+        test_dataloader,
         vocab_to_int,
         int_to_vocab,
         targets_to_int,

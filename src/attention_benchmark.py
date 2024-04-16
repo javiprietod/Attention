@@ -173,7 +173,7 @@ if __name__ == "__main__":
         batch_size=16,
         percent=0.005,
     )
-    sequence_length: torch.Tensor = next(iter(data))[0][1]
+    sequence_length: int = next(iter(data))[0].shape[1]
 
     main(
         SelfAttention(EMBEDDING_DIM, 4),
