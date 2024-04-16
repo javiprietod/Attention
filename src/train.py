@@ -8,7 +8,7 @@ from tqdm.auto import tqdm  # type: ignore
 import json
 
 # own modules
-from src.models import EncoderModel
+from src.models import EncoderModel, LinformerModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -67,7 +67,7 @@ def main(model_name: str) -> None:
 
     # define loss and optimizer
     loss: torch.nn.Module = torch.nn.CrossEntropyLoss()
-    optimizer: torch.optim.Optimizer = torch.optim.Adam(
+    optimizer: torch.optim.Optimizer = torch.optim.AdamW(
         model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"]
     )
     scheduler = torch.optim.lr_scheduler.StepLR(
@@ -94,4 +94,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main("EncoderModel")
+    main("LinformerModel")
