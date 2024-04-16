@@ -11,7 +11,7 @@ from src.utils import (
     load_benchmark_data,
     set_seed,
 )
-from src.models import SelfAttention, PositionalEncoding
+from src.models import SelfAttention, PositionalEncoding, KernelizedAttention
 
 # set device
 device: torch.device = (

@@ -205,34 +205,6 @@ class KernelizedAttention(torch.nn.Module):
         return output[: self.n].to(torch.float64)
 
 
-class AttentionModelK(torch.nn.Module):
-    """
-    This class is the model for the attention models.
-    """
-
-    def __init__(
-        self,
-        attention: torch.nn.Module,
-        sequence_length: int,
-        vocab_to_int: dict[str, int],
-    ) -> None:
-        super().__init__()
-        self.attention = attention
-        self.vocab_to_int = vocab_to_int
-        self.base_model = torch.nn.Embedding(
-            len(vocab_to_int), EMBEDDING_DIM, len(vocab_to_int) - 1
-        )
-        self.linear = torch.nn.Linear(EMBEDDING_DIM * sequence_length, NUM_CLASSES)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        x = self.base_model(inputs)
-
-        x = self.attention(x)
-
-        x = x.view(x.size(0), -1)
-        return self.linear(x)
-
-
 class KernelizedModel(torch.nn.Module):
     """
     Model constructed used Block modules.
@@ -248,6 +220,7 @@ class KernelizedModel(torch.nn.Module):
         embedding_dim: int = 100,
         num_heads: int = 4,
         mapping_dim: int = 0,
+        **kwargs,
     ) -> None:
         """
         Constructor of the class CNNModel.
