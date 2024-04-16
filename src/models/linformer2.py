@@ -22,7 +22,7 @@ class LinformerSelfAttention(torch.nn.Module):
         assert dim % heads == 0, "Dimension must be divisible by the number of heads."
         self.eps = 1e-6
         self.seq_len = seq_len
-        self.k = k
+        self.k = 48
         self.heads = heads
         self.dim_head = (dim // heads) if dim_head is None else dim_head
         print(self.k)

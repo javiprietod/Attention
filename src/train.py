@@ -8,7 +8,7 @@ from tqdm.auto import tqdm  # type: ignore
 import json
 
 # own modules
-from src.models import EncoderModel, LinformerModel
+from src.models import EncoderModel, LinformerModel, KernelizedLinformerModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -94,4 +94,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main("LinformerModel")
+    main("KernelizedLinformerModel")

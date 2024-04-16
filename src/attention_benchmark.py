@@ -13,6 +13,8 @@ from src.utils import (
 )
 from src.models import SelfAttention, PositionalEncoding
 from src.models.linformer2 import LinformerSelfAttention
+from src.models.kern_linf import KernelizedLinformerAttention
+from src.models.kernelized_model import KernelizedAttention
 
 # set device
 """
@@ -184,8 +186,8 @@ if __name__ == "__main__":
     sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
-        SelfAttention(EMBEDDING_DIM, 4),
-        LinformerSelfAttention(EMBEDDING_DIM, sequence_length, heads=4),
+        KernelizedLinformerAttention(EMBEDDING_DIM, num_heads=4, mapping_dim=EMBEDDING_DIM//2, seq_len=sequence_length),
+        KernelizedAttention(EMBEDDING_DIM, num_headss=4, mapping_dim=EMBEDDING_DIM//2),
         data,
         vocab_to_int,
     )
