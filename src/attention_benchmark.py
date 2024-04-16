@@ -11,7 +11,7 @@ from src.utils import (
     load_benchmark_data,
     set_seed,
 )
-from src.models import SelfAttention, PositionalEncoding
+from src.models import SelfAttention, PositionalEncoding, LSHmodule
 
 # set device
 device: torch.device = (
@@ -173,11 +173,11 @@ if __name__ == "__main__":
         batch_size=16,
         percent=0.005,
     )
-    sequence_length: torch.Tensor = next(iter(data))[0][1]
+    sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
+        LSHmodule(EMBEDDING_DIM, 4, 128),
         SelfAttention(EMBEDDING_DIM, 4),
-        torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
         data,
         vocab_to_int,
     )
