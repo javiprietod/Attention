@@ -69,8 +69,8 @@ class LinformerSelfAttention(torch.nn.Module):
         v = v.reshape(b, n, self.heads, self.dim_head).transpose(1, 2)
 
         # Proyección de K y V
-        k = torch.einsum("bhnd,nk->bhkd", k, self.E)
-        v = torch.einsum("bhnd,nk->bhkd", v, self.F)
+        k = torch.einsum("bhne,nk->bhke", k, self.E)
+        v = torch.einsum("bhne,nk->bhke", v, self.F)
 
         # Cálculo de atención
         attn_score = torch.matmul(q, k.transpose(-2, -1)) * (self.dim_head**-0.5)
@@ -96,8 +96,8 @@ class LinformerModel(torch.nn.Module):
         num_classes: int = 6,
         hidden_size: int = 1024,
         encoders: int = 6,
-        embedding_dim: int = 100,
-        num_heads: int = 4,
+        e: int = 100, # embedding dim
+        n: int = 4, # number of heads
         **kwargs,
     ) -> None:
         """
@@ -115,34 +115,34 @@ class LinformerModel(torch.nn.Module):
 
         # k and eps
         self.eps = 0.1
-        #k = int(9*math.log(embedding_dim)/(self.eps**2 - self.eps**3))
-        k = int(9*math.log(embedding_dim) / 0.9)
+        #k = int(9*math.log(e)/(self.eps**2 - self.eps**3))
+        k = int(9*math.log(e) / 0.9)
         # Embeddings
         self.embeddings = torch.nn.Embedding(
-            len(vocab_to_int), embedding_dim, len(vocab_to_int) - 1
+            len(vocab_to_int), e, len(vocab_to_int) - 1
         )
 
-        self.positional_encodings = PositionalEncoding(embedding_dim)
+        self.positional_encodings = PositionalEncoding(e)
 
         # Normalization
-        self.normalization = torch.nn.LayerNorm(embedding_dim)
+        self.normalization = torch.nn.LayerNorm(e)
 
         # Linformer self-attention
-        self.self_attention = LinformerSelfAttention(dim=embedding_dim, k=k, heads=num_heads)
+        self.self_attention = LinformerSelfAttention(dim=e, k=k, heads=n)
 
         # mlp
         self.fc = torch.nn.Sequential(
-            torch.nn.Linear(embedding_dim, hidden_size),
+            torch.nn.Linear(e, hidden_size),
             torch.nn.Dropout(0.2),
             torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, embedding_dim),
+            torch.nn.Linear(hidden_size, e),
         )
 
         # classification
-        self.model = torch.nn.Linear(embedding_dim * sequence_length, num_classes)
+        self.model = torch.nn.Linear(e * sequence_length, num_classes)
         self.mlp = torch.nn.Sequential(
-            torch.nn.LayerNorm(embedding_dim * sequence_length),
-            torch.nn.Linear(embedding_dim * sequence_length, hidden_size),
+            torch.nn.LayerNorm(e * sequence_length),
+            torch.nn.Linear(e * sequence_length, hidden_size),
             torch.nn.Dropout(0.2),
             torch.nn.ReLU(),
             torch.nn.Linear(hidden_size, num_classes),
