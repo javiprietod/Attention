@@ -1,0 +1,15 @@
+{
+    "KernelizedModel": {
+        "epochs": 15,
+        "lr": 6e-4,
+        "batch_size": 16,
+        "hidden_size": 1024,
+        "embedding_dim": 128,
+        "encoders": 2,
+        "num_head": 4,
+        "mapping_dim": 128,
+        "weight_decay": 1e-4,
+        "step_size": 12,
+        "gamma": 0.4
+    }
+}

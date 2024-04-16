@@ -16,6 +16,7 @@ device: torch.device = (
     torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 )
 
+
 class KernelizedAttention(torch.nn.Module):
     """
     Normalized Kernelized Attention with RPE using FFT.
@@ -24,7 +25,7 @@ class KernelizedAttention(torch.nn.Module):
     def __init__(
         self,
         embedding_dim: int,
-        num_headss: int,
+        num_heads: int,
         mapping_dim: int | None = None,
     ) -> None:
         """
@@ -32,21 +33,25 @@ class KernelizedAttention(torch.nn.Module):
 
         Args:
             embedding_dim: input channels of the module.
-            num_headss: number of heads in the multi-head attention.
+            num_heads: number of heads in the multi-head attention.
             mapping_dim: mapping dimension of the kernelized attention.
         """
 
         super().__init__()
-        self.num_headss = num_headss
+        self.num_heads = num_heads
         self.embedding_dim = embedding_dim
 
         self.q = torch.nn.Linear(embedding_dim, embedding_dim)
         self.k = torch.nn.Linear(embedding_dim, embedding_dim)
         self.v = torch.nn.Linear(embedding_dim, embedding_dim)
 
-        self.mapping_dim = mapping_dim // num_headss if mapping_dim is not None else embedding_dim // num_headss
+        self.mapping_dim = (
+            mapping_dim // num_heads
+            if mapping_dim is not None
+            else embedding_dim // num_heads
+        )
         self.weights = torch.randn(
-            num_headss, self.mapping_dim, embedding_dim // num_headss
+            num_heads, self.mapping_dim, embedding_dim // num_heads
         ).to(device)
 
         # self.pos_encoding = torch.randn(
@@ -87,41 +92,41 @@ class KernelizedAttention(torch.nn.Module):
         v: torch.Tensor = self.v(x)
 
         q = q.view(
-            x.size(0), x.size(1), self.num_headss, self.embedding_dim // self.num_headss
+            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
         )
         k = k.view(
-            x.size(0), x.size(1), self.num_headss, self.embedding_dim // self.num_headss
+            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
         )
         v = v.view(
-            x.size(0), x.size(1), self.num_headss, self.embedding_dim // self.num_headss
+            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
         )
 
         q = q / torch.norm(q)
         k = k / torch.norm(k)
-# 
+        #
         # c = torch.exp(self.pos_encoding)
 
-        # Size of both: [B, S, N, M]
+        # Size of both: [B, N, H, M]
         phi_q = self.phi(q)
         phi_k = self.phi(k)
 
-        # Size: [B, N, S, M]
+        # Size: [B, H, N, M]
         phi_q = phi_q.transpose(1, 2)
         phi_k = phi_k.transpose(1, 2)
 
-        # Size: [B, N, S, E//N]
+        # Size: [B, H, N, E//H]
         v = v.transpose(1, 2)
 
-        # Size: [B, N, S, M]
+        # Size: [B, H, N, M]
         A2 = phi_k
 
-        # [B, N, S, M] x [B, N, S, E//N] = [B, N, S, M, E//N]
+        # [B, H, N, M] x [B, H, N, E//H] = [B, H, N, M, E//H]
         A1 = torch.einsum("...d,...e->...de", phi_k, v)
 
-        # D1: [B, N, S, M, E//N]
+        # D1: [B, H, N, M, E//H]
         # D1 = self.FFTmatmul(c, A1)
 
-        # D2: [B, N, S, M]
+        # D2: [B, H, N, M]
         # D2 = self.FFTmatmul(c, A2)
 
         num = torch.einsum("abcd,abcde->abce", phi_q, A1)
@@ -129,7 +134,7 @@ class KernelizedAttention(torch.nn.Module):
 
         output: torch.Tensor = num / den
 
-        # Output: [B, S, E]
+        # Output: [B, N, E]
         output = (
             output.transpose(1, 2)
             .contiguous()
@@ -144,20 +149,20 @@ class KernelizedAttention(torch.nn.Module):
 
         Args:
             x: input tensor.
-                Dimensions: [batch, sequence, num_headss, embedding_dim // num_headss]
+                Dimensions: [batch, sequence, num_heads, embedding_dim // num_heads]
 
         Returns:
             output of the kernelized attention module.
         """
         norm_x = torch.norm(x)
 
-        # w: [N, M, E//N]
-        # x: [B, S, N, E//N]
+        # w: [H, M, E//H]
+        # x: [B, N, H, E//H]
         output: torch.Tensor = torch.exp(
             torch.einsum("abc,deac->deab", self.weights, x)
         )
 
-        # output: [B, S, N, M]
+        # output: [B, N, H, M]
         output = output * torch.exp(-(norm_x**2) / 2) / self.mapping_dim
 
         return output
@@ -242,7 +247,7 @@ class KernelizedModel(torch.nn.Module):
         encoders: int = 6,
         embedding_dim: int = 100,
         num_heads: int = 4,
-        mapping_dim: int = 0
+        mapping_dim: int = 0,
     ) -> None:
         """
         Constructor of the class CNNModel.
@@ -268,9 +273,7 @@ class KernelizedModel(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # self-attention
-        self.self_attention = KernelizedAttention(
-            embedding_dim, num_heads, mapping_dim
-        )   
+        self.self_attention = KernelizedAttention(embedding_dim, num_heads, mapping_dim)
 
         # mlp
         self.fc = torch.nn.Sequential(
