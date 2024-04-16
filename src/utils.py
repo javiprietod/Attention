@@ -342,7 +342,7 @@ def load_benchmark_data(
     Returns:
         tuple of dataloaders, train, val and test in respective order.
     """
-    csv_path = f"{path}/imbd.csv"
+    csv_path = f"{path}/imdb.csv"
     # download folders if they are not present
     if not os.path.isfile(csv_path):
         # create main dir

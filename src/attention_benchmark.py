@@ -51,7 +51,11 @@ class AttentionModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.base_model(inputs)
-        x = self.attention(x)
+        try:
+            x = self.attention(x)
+        except:
+            # multihead attention
+            x, _ = self.attention(x, x, x) 
         x = x.view(x.size(0), -1)
         return self.linear(x)
 

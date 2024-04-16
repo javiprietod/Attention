@@ -39,10 +39,8 @@ class SelfAttention(torch.nn.Module):
         Constructor of the class SelfAttention.
 
         Args:
-            sequence_length: input channels of the module.
-            num_classes: output channels of the module.
+            embedding_dim: embedding dimension of the model.
             num_heads: number of heads in the multi-head attention.
-            mask: mask tensor for padding values. Dimensions: [batch, sequence].
         """
 
         super().__init__()
@@ -59,7 +57,7 @@ class SelfAttention(torch.nn.Module):
 
         Args:
             x: input tensor.
-                Dimensions: [batch, sequence, channels].
+                Dimensions: [batch, sequence, embedding_dim].
 
         Returns:
             output of the self attention module.
@@ -69,26 +67,25 @@ class SelfAttention(torch.nn.Module):
         k: torch.Tensor = self.k(x)
         v: torch.Tensor = self.v(x)
 
+        # [B, H, N, E/H]
         q = q.view(
-            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
+            x.size(0), self.num_heads, x.size(1), self.embedding_dim // self.num_heads
         )
         k = k.view(
-            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
+            x.size(0), self.num_heads, x.size(1), self.embedding_dim // self.num_heads
         )
         v = v.view(
-            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
+            x.size(0), self.num_heads, x.size(1), self.embedding_dim // self.num_heads
         )
 
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
-
+        # [B, H, N, E/H] x [B, H, E/H, N] -> [B, H, N, N]
         attention = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(
             self.embedding_dim // self.num_heads
         )
 
         attention = F.softmax(attention, dim=-1)
 
+        # [B, H, N, N] x [B, H, N, E/H] -> [B, H, N, E/H]
         output = torch.matmul(attention, v)
         output = (
             output.transpose(1, 2)
@@ -101,7 +98,7 @@ class SelfAttention(torch.nn.Module):
 
 class EncoderModel(torch.nn.Module):
     """
-    Model constructed used Block modules.
+    Model constructed using complete Self Attention.
     """
 
     def __init__(
@@ -116,11 +113,16 @@ class EncoderModel(torch.nn.Module):
         **kwargs,
     ) -> None:
         """
-        Constructor of the class CNNModel.
+        Constructor of the class EncoderModel.
 
         Args:
-            layers: output channel dimensions of the Blocks.
             sequence_length: input channels of the model.
+            vocab_to_int: dictionary of vocabulary to integers.
+            num_classes: output channels of the model.
+            hidden_size: hidden size of the model.
+            encoders: number of encoders in the model.
+            embedding_dim: embedding dimension of the model.
+            num_heads: number of heads in the multi-head attention.
         """
 
         super().__init__()
@@ -161,15 +163,14 @@ class EncoderModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
+        This method returns a batch of predictions.
         Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
+            inputs: batch of texts.
+                Dimensions: [batch, sequence]
 
         Returns:
-            batch of logits. Dimensions: [batch, num_classes].
+            batch of predictions. 
+                Dimensions: [batch, num_classes].
         """
 
         x = self.embeddings(inputs)
@@ -191,7 +192,7 @@ class EncoderModel(torch.nn.Module):
 
 class PytorchModel(torch.nn.Module):
     """
-    Model constructed used Block modules.
+    Model constructed using torch's Multi Head Attention.
     """
 
     def __init__(
@@ -206,11 +207,16 @@ class PytorchModel(torch.nn.Module):
         **kwargs,
     ) -> None:
         """
-        Constructor of the class CNNModel.
+        Constructor of the class PytorchModel.
 
         Args:
-            layers: output channel dimensions of the Blocks.
             sequence_length: input channels of the model.
+            vocab_to_int: dictionary of vocabulary to integers.
+            num_classes: output channels of the model.
+            hidden_size: hidden size of the model.
+            encoders: number of encoders in the model.
+            embedding_dim: embedding dimension of the model.
+            num_heads: number of heads in the multi-head attention.
         """
 
         super().__init__()
@@ -251,15 +257,14 @@ class PytorchModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
+        This method returns a batch of predictions.
         Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
+            inputs: batch of texts.
+                Dimensions: [batch, sequence]
 
         Returns:
-            batch of logits. Dimensions: [batch, num_classes].
+            batch of predictions. 
+                Dimensions: [batch, num_classes].
         """
 
         x = self.embeddings(inputs)
