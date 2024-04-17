@@ -32,6 +32,8 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 
 NUMBER_OF_CLASSES: int = 6
 
+MODEL_NAME: Literal["EncoderModel", "PytorchModel", "KernelizedModel"] = "KernelizedModel"
+
 
 def main() -> None:
     """
