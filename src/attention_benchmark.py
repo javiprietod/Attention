@@ -51,7 +51,11 @@ class AttentionModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         x = self.base_model(inputs)
-        x = self.attention(x)
+        try:
+            x = self.attention(x)
+        except:
+            # multihead attention
+            x, _ = self.attention(x, x, x) 
         x = x.view(x.size(0), -1)
         return self.linear(x)
 
@@ -173,7 +177,7 @@ if __name__ == "__main__":
         batch_size=16,
         percent=0.005,
     )
-    sequence_length: torch.Tensor = next(iter(data))[0][1]
+    sequence_length: int = next(iter(data))[0].shape[1]
 
     main(
         SelfAttention(EMBEDDING_DIM, 4),
