@@ -94,4 +94,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main("KernelizedLinformerModel")
+    main("LinformerModel")

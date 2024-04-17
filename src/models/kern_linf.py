@@ -129,16 +129,16 @@ class KernelizedLinformerAttention(torch.nn.Module):
         # Proyection of K and V (Linformer)
         # [B, H, N, M//H] -> [B, H, L, M//H]
         phi_k = torch.einsum("bhne,nl->bhle", phi_k, self.E)
-        # (B, N, H, E//H) -> (B, L, H, E//H) -> (B, H, L, E//H)
+        # [B, N, H, E//H] -> [B, L, H, E//H] -> [B, H, L, E//H]
         v = torch.einsum("bnhe,nl->bhle", v, self.F)
 
-        # [B, H, M//H, L] @ (B, H, L, E) -> (B, H, M//H, E)
+        # [B, H, M//H, L] @ [B, H, L, E] -> [B, H, M//H, E]
         A1 = torch.matmul(phi_k.transpose(2,3), v)
         
-        # [B, H, N, M//H] @ (B, H, M//H, E) -> (B, H, N, E)
+        # [B, H, N, M//H] @ [B, H, M//H, E] -> [B, H, N, E]
         num = torch.matmul(phi_q, A1)
         
-        # [B, H, N, M//H] @ (B, H, N, M//H) -> (B, H, N) -> (B, H, N, 1)
+        # [B, H, N, M//H] @ [B, H, N, M//H] -> [B, H, N) -> (B, H, N, 1)
         den = torch.einsum("abcd,abcd->abc", phi_q, A2).unsqueeze(-1)
 
         # [B, H, N, E]
