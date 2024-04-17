@@ -22,6 +22,18 @@ device: torch.device = (
     torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 )
 
+
+def init_(tensor):
+    """
+    Initialize the given tensor with uniform distribution scaled by the inverse
+    square root of its last dimension.
+    """
+    dim = tensor.shape[-1]
+    std = 1 / math.sqrt(dim)
+    tensor.uniform_(-std, std)
+    return tensor
+
+
 class KernelizedLinformerAttention(torch.nn.Module):
     """
     Normalized Kernelized Attention with RPE using FFT.
@@ -47,17 +59,19 @@ class KernelizedLinformerAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.embedding_dim = embedding_dim
         self.seq_len = seq_len
-        self.l = 48 # linformer k dimension of proyection of n
+
+        # Linformer parameters
+        self.l = 48 # linformer l dimension of proyection of n (sequence length)
         self.sigma = 1 / (2**self.seq_len)
 
-        # Matrices de proyección no entrenables E y F
+        # Proyection matrices E and F
         R = torch.randn((self.seq_len, self.l)) / math.sqrt(self.l)
         R = normalize(R, p=2, dim=1)  # Normalizar R
 
-        # Convertir sigma a un tensor para poder usar torch.exp
+        # Convert sigma to tensor
         sigma_tensor = torch.full((1,), self.sigma, dtype=R.dtype, device=R.device)
 
-        # E y F como atributos constantes
+        # E and F as constant attributes (non trainable)
         self.register_buffer("E", sigma_tensor * R)
         self.register_buffer("F", torch.exp(-sigma_tensor) * R)
 
@@ -69,27 +83,6 @@ class KernelizedLinformerAttention(torch.nn.Module):
         self.weights = torch.randn(
             num_heads, self.mapping_dim, embedding_dim // num_heads
         ).to(device)
-
-        # self.pos_encoding = torch.randn(
-        #     2 * seq_length - 1, requires_grad=True, dtype=torch.cdouble
-        # ).to(device)
-
-        # self.n = seq_length
-        # w = np.exp(np.pi * 2j / seq_length)
-
-        # # We compute the FFT matrix
-        # self.F_2n = torch.tensor(
-        #     [
-        #         [w ** (i * j) for j in range(2 * seq_length)]
-        #         for i in range(2 * seq_length)
-        #     ]
-        # )
-        # self.F_2n_inv = torch.tensor(
-        #     [
-        #         [w ** (-i * j) for j in range(2 * seq_length)]
-        #         for i in range(2 * seq_length)
-        #     ]
-        # )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -103,10 +96,12 @@ class KernelizedLinformerAttention(torch.nn.Module):
             output of the self attention module.
         """
 
+        # (B, N, E)
         q: torch.Tensor = self.q(x)
         k: torch.Tensor = self.k(x)
         v: torch.Tensor = self.v(x)
 
+        # (B, N, E) -> (B, N, H, E//H)
         q = q.view(
             x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
         )
@@ -119,38 +114,37 @@ class KernelizedLinformerAttention(torch.nn.Module):
 
         q = q / torch.norm(q) # (batch, n, head, embedding_dim)
         k = k / torch.norm(k) # (batch, n, head, embedding_dim)
-# 
-        # c = torch.exp(self.pos_encoding)
 
-        # Size of both: [B, S, N, M]
-        phi_q = self.phi(q) # (batch, n, head, mapping_dim//heads)
-        phi_k = self.phi(k) # (batch, n, head, mapping_dim//heads)
+        # Size of both: [B, N, H, M//H]
+        phi_q = self.phi(q)
+        phi_k = self.phi(k)
 
-        # Size: [B, N, S, M] S = Head
-        phi_q = phi_q.transpose(1, 2) # (batch, head, n, m)
-        phi_k = phi_k.transpose(1, 2) # (batch, head, n, m)
+        # Size: [B, H, N, M//H]
+        phi_q = phi_q.transpose(1, 2)
+        phi_k = phi_k.transpose(1, 2)
 
-        # Size: [B, N, S, M]
+        # Size: [B, H, N, M//H]
         A2 = phi_k
 
-        # LARA
-        # Proyección de K y V
-        phi_k = torch.einsum("bhne,nk->bhke", phi_k, self.E) # (batch, head, k, m)
-        v = torch.einsum("bnhe,nk->bkhe", v, self.F) # (batch, n, head, m)
+        # Proyection of K and V (Linformer)
+        # [B, H, N, M//H] -> [B, H, L, M//H]
+        phi_k = torch.einsum("bhne,nl->bhle", phi_k, self.E)
+        # (B, N, H, E//H) -> (B, L, H, E//H) -> (B, H, L, E//H)
+        v = torch.einsum("bnhe,nl->bhle", v, self.F)
 
-        # Size: [B, N, S, E//N]
-        v = v.transpose(1, 2) # (batch, head, n, m)
-
-        # (b, head, map_dim, k) @ (batch, head, k, emb_dim) -> (batch, head, map_dim, emb_dim)
+        # [B, H, M//H, L] @ (B, H, L, E) -> (B, H, M//H, E)
         A1 = torch.matmul(phi_k.transpose(2,3), v)
         
-        num = torch.matmul(phi_q, A1) # (batch, head, n, emb_dim)
+        # [B, H, N, M//H] @ (B, H, M//H, E) -> (B, H, N, E)
+        num = torch.matmul(phi_q, A1)
         
+        # [B, H, N, M//H] @ (B, H, N, M//H) -> (B, H, N) -> (B, H, N, 1)
         den = torch.einsum("abcd,abcd->abc", phi_q, A2).unsqueeze(-1)
 
+        # [B, H, N, E]
         output: torch.Tensor = num / den
 
-        # Output: [B, S, E]
+        # Output: [B, N, E]
         output = (
             output.transpose(1, 2)
             .contiguous()
@@ -331,183 +325,9 @@ class KernelizedLinformerModel(torch.nn.Module):
         for _ in range(self.encoders):
             attention_x = self.self_attention(x)
 
-            x = self.normalization(attention_x)
-
-            x = self.fc(x) + x
-
-            x = self.normalization(x)
-
-        x = x.view(x.size(0), -1)
-
-        return self.model(x)
-
-
-
-
-def default(val, default_val):
-    return val if val is not None else default_val
-
-
-def init_(tensor):
-    dim = tensor.shape[-1]
-    std = 1 / math.sqrt(dim)
-    tensor.uniform_(-std, std)
-    return tensor
-
-
-class LinformerSelfAttention(torch.nn.Module):
-    def __init__(self, dim, seq_len=68, k=256, heads=8, dim_head=None, dropout=0.0):
-        super().__init__()
-        assert dim % heads == 0, "Dimension must be divisible by the number of heads."
-        self.eps = 1e-6
-        self.seq_len = seq_len
-        self.k = k
-        self.heads = heads
-        self.dim_head = (dim // heads) if dim_head is None else dim_head
-        self.sigma = 1 / (2**self.seq_len)
-
-        # Matrices de proyección no entrenables E y F
-        R = torch.randn((self.seq_len, self.k)) / math.sqrt(self.k)
-        R = normalize(R, p=2, dim=1)  # Normalizar R
-
-        # Convertir sigma a un tensor para poder usar torch.exp
-        sigma_tensor = torch.full((1,), self.sigma, dtype=R.dtype, device=R.device)
-
-        # E y F como atributos constantes
-        self.register_buffer("E", sigma_tensor * R)
-        self.register_buffer("F", torch.exp(-sigma_tensor) * R)
-
-        # Inicializar las capas lineales para Q, K, V
-        self.to_q = torch.nn.Linear(dim, self.dim_head * heads, bias=False)
-        self.to_k = torch.nn.Linear(dim, self.dim_head * heads, bias=False)
-        self.to_v = torch.nn.Linear(dim, self.dim_head * heads, bias=False)
-
-        # Capa de salida
-        self.to_out = torch.nn.Linear(self.dim_head * heads, dim)
-
-        # Dropout
-        self.dropout = torch.nn.Dropout(dropout)
-
-    def forward(self, x: torch.Tensor):
-        # b, n, _, _ = *x.shape, self.dim_head, self.heads
-        (
-            b,
-            n,
-            d,
-        ) = x.shape
-
-        # Pasar a través de las capas lineales Q, K, V
-        q: torch.Tensor = self.to_q(x)
-        k: torch.Tensor = self.to_k(x)
-        v: torch.Tensor = self.to_v(x)
-
-        # Redimensionar Q, K, V
-        q = q.reshape(b, n, self.heads, self.dim_head).transpose(1, 2)
-        k = k.reshape(b, n, self.heads, self.dim_head).transpose(1, 2)
-        v = v.reshape(b, n, self.heads, self.dim_head).transpose(1, 2)
-
-        # Proyección de K y V
-        k = torch.einsum("bhne,nk->bhke", k, self.E)
-        v = torch.einsum("bhne,nk->bhke", v, self.F)
-
-        # Cálculo de atención
-        attn_score = torch.matmul(q, k.transpose(-2, -1)) * (self.dim_head**-0.5)
-        attn_prob = torch.softmax(attn_score, dim=-1)
-        attn_out = torch.matmul(attn_prob, v)
-
-        # Fusionar cabezas
-        attn_out = attn_out.transpose(1, 2).reshape(b, n, self.heads * self.dim_head)
-        attn_out = self.to_out(attn_out)
-
-        return attn_out
-
-
-class LinformerModel(torch.nn.Module):
-    """
-    Model constructed used Block modules.
-    """
-
-    def __init__(
-        self,
-        sequence_length: int,
-        vocab_to_int: dict[str, int],
-        num_classes: int = 6,
-        hidden_size: int = 1024,
-        encoders: int = 6,
-        e: int = 100, # embedding dim
-        n: int = 4, # number of heads
-        **kwargs,
-    ) -> None:
-        """
-        Constructor of the class CNNModel.
-
-        Args:
-            layers: output channel dimensions of the Blocks.
-            sequence_length: input channels of the model.
-        """
-
-        super().__init__()
-        self.vocab_to_int: dict[str, int] = vocab_to_int
-
-        self.encoders: int = encoders
-
-        # k and eps
-        self.eps = 0.1
-        #k = int(9*math.log(e)/(self.eps**2 - self.eps**3))
-        k = int(9*math.log(e) / 0.9)
-        # Embeddings
-        self.embeddings = torch.nn.Embedding(
-            len(vocab_to_int), e, len(vocab_to_int) - 1
-        )
-
-        self.positional_encodings = PositionalEncoding(e)
-
-        # Normalization
-        self.normalization = torch.nn.LayerNorm(e)
-
-        # Linformer self-attention
-        self.self_attention = LinformerSelfAttention(dim=e, k=k, heads=n)
-
-        # mlp
-        self.fc = torch.nn.Sequential(
-            torch.nn.Linear(e, hidden_size),
-            torch.nn.Dropout(0.2),
-            torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, e),
-        )
-
-        # classification
-        self.model = torch.nn.Linear(e * sequence_length, num_classes)
-        self.mlp = torch.nn.Sequential(
-            torch.nn.LayerNorm(e * sequence_length),
-            torch.nn.Linear(e * sequence_length, hidden_size),
-            torch.nn.Dropout(0.2),
-            torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, num_classes),
-        )
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
-        Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
-
-        Returns:
-            batch of logits. Dimensions: [batch, num_classes].
-        """
-
-        x = self.embeddings(inputs)
-        x = self.positional_encodings(x)
-
-        for _ in range(self.encoders):
-            attention_x = self.self_attention(x)
-
             x = self.normalization(attention_x) + x
 
-            fc_x = self.fc(x)
+            fc_x = self.fc(x) 
 
             x = self.normalization(fc_x) + x
 
