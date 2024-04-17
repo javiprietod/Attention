@@ -6,6 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 # other libraries
 from tqdm.auto import tqdm  # type: ignore
 import json
+from typing import Literal
 
 # own modules
 from src.models import EncoderModel, LinformerModel, KernelizedLinformerModel
@@ -25,13 +26,16 @@ device: torch.device = (
 set_seed(42)
 torch.set_num_threads(4)
 
-# static variables
 DATA_PATH: str = "data"
+
+DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 
 NUMBER_OF_CLASSES: int = 6
 
+MODEL_NAME: Literal["EncoderModel", "PytorchModel", "LinformerModel", "KernelizedLinformerModel"] = "KernelizedLinformerModel"
 
-def main(model_name: str) -> None:
+
+def main() -> None:
     """
     This function is the main program for the training.
     """
@@ -40,25 +44,25 @@ def main(model_name: str) -> None:
     open("nohup.out", "w").close()
 
     with open("params.json", "r") as file:
-        params = json.load(file)[model_name]
+        params = json.load(file)[MODEL_NAME]
 
     # load data
     train_data: DataLoader
     val_data: DataLoader
-    train_data, val_data, test_data, vocab_to_int, _, _, int_to_target = load_text_data(
-        DATA_PATH, batch_size=params["batch_size"]
+    train_data, val_data, test_data, vocab_to_int, i_, _, int_to_target = load_text_data(
+        DATA_PATH, DATASET_NAME, batch_size=params["batch_size"]
     )
 
     # define name and writer
     name: str = (
-        f"model_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
+        f"{MODEL_NAME}_{DATASET_NAME}_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
         f"_encoders_{params['encoders']}_embedding_{params['embedding_dim']}_heads_{params['num_heads']}"
     )
-    writer: SummaryWriter = SummaryWriter(f"runs/{model_name}/{name}")
+    writer: SummaryWriter = SummaryWriter(f"runs/{MODEL_NAME}/{name}")
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
-    model: torch.nn.Module = eval(model_name)(
+    model: torch.nn.Module = eval(MODEL_NAME)(
         sequence_length=inputs.shape[1],
         vocab_to_int=vocab_to_int,
         num_classes=NUMBER_OF_CLASSES,
@@ -71,7 +75,7 @@ def main(model_name: str) -> None:
         model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"]
     )
     scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=params["step_size"], gamma=params["gamma"], verbose=True
+        optimizer, step_size=params["step_size"], gamma=params["gamma"]
     )
 
     # train loop
@@ -94,4 +98,4 @@ def main(model_name: str) -> None:
 
 
 if __name__ == "__main__":
-    main("LinformerModel")
+    main()
