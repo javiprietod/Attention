@@ -1,13 +1,12 @@
 # deep learning libraries
 import torch
-from torchtext.data import get_tokenizer # type: ignore
+from torchtext.data import get_tokenizer  # type: ignore
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.jit import RecursiveScriptModule
 
 # other libraries
 import numpy as np
 import pandas as pd
-import re
 import os
 import random
 import requests
@@ -130,7 +129,9 @@ class IMBDDataset(GeneralDataset):
 
         text = (
             [self.start_token]
-            + self.tokenizer(self.dataset[self.text_column][index].replace("<br />", ""))
+            + self.tokenizer(
+                self.dataset[self.text_column][index].replace("<br />", "")
+            )
             + [self.end_token]
         )[: self.max_len]
         text = [self.pad_token] * (self.max_len - len(text)) + text
@@ -159,7 +160,13 @@ def collate_fn(
     texts, labels = list(zip(*batch))  # type: ignore
 
     # Encoding words and labels
-    texts_encoded = [[vocab_to_int[word] if word in vocab_to_int else len(vocab_to_int) - 1 for word in text ] for text in texts]
+    texts_encoded = [
+        [
+            vocab_to_int[word] if word in vocab_to_int else len(vocab_to_int) - 1
+            for word in text
+        ]
+        for text in texts
+    ]
     labels_encoded = [target_to_int[label] for label in labels]
 
     return torch.tensor(texts_encoded, dtype=torch.int), torch.tensor(
@@ -261,7 +268,11 @@ def load_text_data(
     # create lookup tables
     dataset = pd.read_csv(csv_path)
     text_column, label_column = list(dataset.columns)
-    words = [word for text in dataset[text_column] for word in get_tokenizer("basic_english")(text)]
+    words = [
+        word
+        for text in dataset[text_column]
+        for word in get_tokenizer("basic_english")(text)
+    ]
     vocab_to_int, int_to_vocab = create_lookup_tables(
         words, start_token, end_token, pad_token
     )
@@ -269,13 +280,15 @@ def load_text_data(
     targets_to_int = {target: ii for ii, target in enumerate(targets)}
     int_to_targets = {ii: target for target, ii in targets_to_int.items()}
 
+    train_dataset: Dataset
+
     # create datasets
     if dataset_name == "emotions":
-        train_dataset: Dataset = EmotionsDataset(
+        train_dataset = EmotionsDataset(
             csv_path, vocab_to_int, start_token, end_token, pad_token
         )
     elif dataset_name == "imdb":
-        train_dataset: Dataset = IMBDDataset(
+        train_dataset = IMBDDataset(
             csv_path, vocab_to_int, start_token, end_token, pad_token
         )
     else:
@@ -361,7 +374,11 @@ def load_benchmark_data(
     # create lookup tables
     dataset = pd.read_csv(csv_path)
     text_column, label_column = list(dataset.columns)
-    words = [word for text in dataset[text_column] for word in get_tokenizer("basic_english")(text.replace("<br />", ""))]
+    words = [
+        word
+        for text in dataset[text_column]
+        for word in get_tokenizer("basic_english")(text.replace("<br />", ""))
+    ]
     vocab_to_int, int_to_vocab = create_lookup_tables(
         words, start_token, end_token, pad_token
     )

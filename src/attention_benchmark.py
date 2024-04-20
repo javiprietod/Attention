@@ -16,7 +16,6 @@ from src.models import (
     PositionalEncoding,
     LocalAttention,
     LocalAttentionUnFold,
-    LocalAttentionUnFoldDef,
 )
 
 # set device
@@ -61,7 +60,7 @@ class AttentionModel(torch.nn.Module):
             x = self.attention(x)
         except:
             # multihead attention
-            x, _ = self.attention(x, x, x) 
+            x, _ = self.attention(x, x, x)
         x = x.view(x.size(0), -1)
         return self.linear(x)
 
@@ -186,8 +185,8 @@ if __name__ == "__main__":
     sequence_length: int = next(iter(data))[0].shape[1]
 
     main(
-        LocalAttentionUnFoldDef(EMBEDDING_DIM, 4, 7, int(sequence_length)),
-        LocalAttentionUnFold(EMBEDDING_DIM, 4, 7),
+        LocalAttentionUnFold(EMBEDDING_DIM, 4, 7, sequence_length),
+        SelfAttention(EMBEDDING_DIM, 4),
         data,
         vocab_to_int,
     )

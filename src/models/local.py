@@ -7,15 +7,15 @@ from src.models import PositionalEncoding
 
 class LocalAttention(nn.Module):
     """
-    Local self attention module.
+    Local window self attention module using loops.
     """
 
     def __init__(self, embedding_dim: int, num_heads: int, window_size: int) -> None:
         """
-        Constructor of the class LocalSelfAttention.
+        Constructor of the class LocalAttention using loops.
 
         Args:
-            embedding_dim: embedding dimension of the input.
+            embedding_dim: embedding dimension of the model.
             num_heads: number of heads in the multi-head attention.
             window_size: size of the local attention window.
         """
@@ -27,19 +27,18 @@ class LocalAttention(nn.Module):
         self.head_dim = embedding_dim // num_heads
         self.scale = self.head_dim**-0.5
 
+        # Linear layers for queries, keys and values
         self.q = nn.Linear(embedding_dim, embedding_dim)
         self.k = nn.Linear(embedding_dim, embedding_dim)
         self.v = nn.Linear(embedding_dim, embedding_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        This method returns the output of the local self attention module.
+        This method returns the output of the local window self attention module using loops.
 
         Args:
             x: input tensor.
-                Dimensions: [batch, sequence, channels].
-            mask: mask tensor for padding values.
-                Dimensions: [batch, sequence].
+                Dimensions: [batch, sequence, embedding_dim].
 
         Returns:
             output of the local self attention module.
@@ -51,15 +50,12 @@ class LocalAttention(nn.Module):
         k: torch.Tensor = self.k(x)
         v: torch.Tensor = self.v(x)
 
-        q = q.view(batch_size, sequence_length, self.num_heads, self.head_dim)
-        k = k.view(batch_size, sequence_length, self.num_heads, self.head_dim)
-        v = v.view(batch_size, sequence_length, self.num_heads, self.head_dim)
+        # Transform Q, K and V to have shape [B, H, N, E/H]
+        q = q.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+        k = k.view(batch_size, self.num_heads, sequence_length, self.head_dim)
+        v = v.view(batch_size, self.num_heads, sequence_length, self.head_dim)
 
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
-
-        # Initialize attention scores with zeros
+        # Initialize attention scores with zeros and dimensions [B, H, N, 1, N]
         attention_scores = torch.zeros(
             batch_size,
             self.num_heads,
@@ -69,16 +65,20 @@ class LocalAttention(nn.Module):
             device=x.device,
         )
 
+        # Transpose and reshape Q -> [B, H, N, 1, E/H] and K -> [B, H, E/H, N]
         k = k.transpose(-2, -1)
         q = q.unsqueeze(3)
 
         for i in range(sequence_length):
             start = max(0, i - self.window_size)
             end = min(sequence_length, i + self.window_size)
+
+            # Calculate attention scores multiplying Q and K [B, H, 1, E/H] x [B, H, E/H, W] -> [B, H, 1, W]
             attention_scores[:, :, i, :, start:end] = torch.matmul(
                 q[:, :, i, :, :], k[:, :, :, start:end]
             )
 
+        # Reshape attention scores to [B, H, N, N]
         attention_scores = attention_scores.squeeze(3)
 
         # Normalize attention scores
@@ -87,10 +87,10 @@ class LocalAttention(nn.Module):
         # Apply softmax
         attention_probs = F.softmax(attention_scores, dim=-1)
 
-        # Apply attention to the values
+        # Apply attention to the values [B, H, N, N] x [B, H, N, E/H] -> [B, H, N, E/H]
         output = torch.matmul(attention_probs, v)
 
-        # Transpose and reshape output
+        # Transpose and reshape output [B, H, N, E/H] -> [B, N, H, E/H] -> [B, N, E]
         output = (
             output.transpose(1, 2)
             .contiguous()
@@ -101,67 +101,23 @@ class LocalAttention(nn.Module):
 
 
 class LocalAttentionUnFold(nn.Module):
-    def __init__(self, embedding_dim: int, num_heads: int, window_size: int) -> None:
-        super().__init__()
-        self.num_heads = num_heads
-        self.embedding_dim = embedding_dim
-        self.window_size = window_size
-        self.head_dim = embedding_dim // num_heads
-        self.scale = self.head_dim**-0.5
+    """
+    Local window self attention module using unfold.
+    """
 
-        self.q = nn.Linear(embedding_dim, embedding_dim)
-        self.k = nn.Linear(embedding_dim, embedding_dim)
-        self.v = nn.Linear(embedding_dim, embedding_dim)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        batch_size, sequence_length, _ = x.size()
-
-        q: torch.Tensor = self.q(x)
-        k: torch.Tensor = self.k(x)
-        v: torch.Tensor = self.v(x)
-
-        # Transform to Q, K, V
-        q = q.view(batch_size, self.num_heads, sequence_length, self.head_dim)
-        k = k.view(batch_size, self.num_heads, sequence_length, self.head_dim)
-        v = v.view(batch_size, self.num_heads, sequence_length, self.head_dim)
-
-        # Use unfold to create sliding windows
-        k_unfolded = k.unfold(dimension=2, size=self.window_size, step=1).contiguous()
-        v_unfolded = v.unfold(dimension=2, size=self.window_size, step=1).contiguous()
-
-        # Pad q, k, v unfolded tensors to have the same sequence length
-        padding = (self.window_size - 1) // 2
-        q_padded = F.pad(q, (0, 0, padding, padding), "constant", 0.0)
-
-        q_unfolded = q_padded.unfold(
-            dimension=2, size=self.window_size, step=1
-        ).contiguous()
-
-        # Calculate scores
-        attention_scores = (
-            torch.einsum("bnqdh,bnkdh->bnqk", q_unfolded, k_unfolded) * self.scale
-        )
-
-        # Apply softmax
-        attn = F.softmax(attention_scores, dim=-1)
-
-        # Apply attention to the values
-        output = torch.einsum("bnqk,bnkdh->bnqd", attn, v_unfolded)
-
-        # Combine heads
-        output = (
-            output.transpose(1, 2)
-            .contiguous()
-            .view(batch_size, sequence_length, self.embedding_dim)
-        )
-
-        return output
-
-
-class LocalAttentionUnFoldDef(nn.Module):
     def __init__(
         self, embedding_dim: int, num_heads: int, window_size: int, sequence_length: int
     ) -> None:
+        """
+        Constructor of the class LocalAttention using unfold.
+
+        Args:
+            embedding_dim: embedding dimension of the model.
+            num_heads: number of heads in the multi-head attention.
+            window_size: size of the local attention window.
+            sequence_length: length of the sequence.
+        """
+
         super().__init__()
         self.num_heads = num_heads
         self.embedding_dim = embedding_dim
@@ -170,10 +126,12 @@ class LocalAttentionUnFoldDef(nn.Module):
         self.scale = self.head_dim**-0.5
         self.padding = (window_size - 1) // 2
 
+        # Linear layers for queries, keys and values
         self.q = nn.Linear(embedding_dim, embedding_dim)
         self.k = nn.Linear(embedding_dim, embedding_dim)
         self.v = nn.Linear(embedding_dim, embedding_dim)
 
+        # Create indices for padding
         self.i = torch.tensor(
             [
                 [i for _ in range(-self.padding, self.padding + 1)]
@@ -188,29 +146,40 @@ class LocalAttentionUnFoldDef(nn.Module):
         ).view(-1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        This method returns the output of the self attention module using unfold.
+
+        Args:
+            x: input tensor.
+                Dimensions: [batch, sequence, embedding_dim].
+
+        Returns:
+            output of the self attention module.
+        """
         batch_size, sequence_length, _ = x.size()
 
         q: torch.Tensor = self.q(x)
         k: torch.Tensor = self.k(x)
         v: torch.Tensor = self.v(x)
 
-        # Transform to Q, K, V
+        # Transform Q, K and V to have shape [B, H, N, E/H]
         q = q.view(batch_size, self.num_heads, sequence_length, self.head_dim)
         k = k.view(batch_size, self.num_heads, sequence_length, self.head_dim)
         v = v.view(batch_size, self.num_heads, sequence_length, self.head_dim)
 
-        # Pad q, k, v unfolded tensors to have the same sequence length
-
+        # Unfold K to have shape [B, H, N, E/H, W]
         k_unf = F.pad(k, (0, 0, self.padding, self.padding), "constant", 0.0).unfold(
             dimension=2, size=self.window_size, step=1
         )
 
-        att = torch.einsum("...cde,...cd->...ce", k_unf, q)  # * self.scale
+        # Multiply Q and K [B, H, N, E/H, W] x [B, H, N, E/H] -> [B, H, N, W]
+        att = torch.einsum("...cde,...cd->...ce", k_unf, q) * self.scale
 
-        # Apply softmax
+        # Apply softmax and reshape [B, H, N, W] -> [B, H, NxW]
         attn = F.softmax(att, dim=-1).view(att.shape[0], att.shape[1], -1)
 
-        qk = torch.empty(
+        # Create tensor to store the attention values [B, H, N, N + 2*padding]
+        qk = torch.zeros(
             att.shape[0],
             att.shape[1],
             att.shape[2],
@@ -218,14 +187,16 @@ class LocalAttentionUnFoldDef(nn.Module):
             device=x.device,
         )
 
+        # Fill the tensor with the attention values [B, H, N, N + 2*padding]
         qk[:, :, self.i, self.j] = attn.view(attn.shape[0], attn.shape[1], -1)
 
+        # Remove padding [B, H, N, N + 2*padding] -> [B, H, N, N]
         qk = qk[:, :, :, self.padding : -self.padding]
 
-        # Apply attention to the values
+        # Apply attention to the values [B, H, N, N] x [B, H, N, E/H] -> [B, H, N, E/H]
         output = torch.matmul(qk, v)
 
-        # Combine heads
+        # Transpose and reshape output [B, H, N, E/H] -> [B, N, H, E/H] -> [B, N, E]
         output = (
             output.transpose(1, 2)
             .contiguous()
@@ -237,7 +208,7 @@ class LocalAttentionUnFoldDef(nn.Module):
 
 class LocalModel(nn.Module):
     """
-    Model constructed used Block modules.
+    Model constructed using Local window self attention.
     """
 
     def __init__(
@@ -253,11 +224,17 @@ class LocalModel(nn.Module):
         **kwargs
     ) -> None:
         """
-        Constructor of the class CNNModel.
+        Constructor of the class LocalModel.
 
         Args:
-            layers: output channel dimensions of the Blocks.
-            input_channels: input channels of the model.
+            sequence_length: length of the sequence.
+            vocab_to_int: dictionary of vocabulary to integers.
+            hidden_size: hidden size of the model.
+            num_classes: output channels of the model.
+            embedding_dim: embedding dimension of the model.
+            encoders: number of encoders in the model.
+            num_heads: number of heads in the multi-head attention.
+            window_size: size of the local attention window.
         """
 
         super().__init__()
@@ -275,12 +252,17 @@ class LocalModel(nn.Module):
         # Normalization
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
-        # self-attention
-        self.self_attention = LocalAttentionUnFoldDef(
+        # Local self-attention using loops
+        # self.self_attention = LocalAttention(
+        #     embedding_dim, num_heads, window_size
+        # )
+
+        # Local self-attention using unfold (faster)
+        self.self_attention = LocalAttentionUnFold(
             embedding_dim, num_heads, window_size, sequence_length
         )
 
-        # mlp
+        # MLP
         self.fc = torch.nn.Sequential(
             torch.nn.Linear(embedding_dim, hidden_size),
             torch.nn.Dropout(0.2),
@@ -288,7 +270,7 @@ class LocalModel(nn.Module):
             torch.nn.Linear(hidden_size, embedding_dim),
         )
 
-        # classification
+        # Classification
         self.model = torch.nn.Linear(embedding_dim * sequence_length, num_classes)
         self.mlp = torch.nn.Sequential(
             torch.nn.LayerNorm(embedding_dim * sequence_length),
@@ -300,15 +282,14 @@ class LocalModel(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
+        This method returns a batch of predictions.
         Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
+            inputs: batch of texts.
+                Dimensions: [batch, sequence]
 
         Returns:
-            batch of logits. Dimensions: [batch, output_channels].
+            batch of predictions.
+                Dimensions: [batch, num_classes].
         """
 
         x = self.embeddings(inputs)
@@ -317,11 +298,11 @@ class LocalModel(nn.Module):
         for _ in range(self.encoders):
             attention_x = self.self_attention(x)
 
-            x = self.normalization(attention_x)
+            x = self.normalization(attention_x) + x
 
-            x = self.fc(x) + x
+            fc_x = self.fc(x)
 
-            x = self.normalization(x)
+            x = self.normalization(fc_x) + x
 
         x = x.view(x.size(0), -1)
 

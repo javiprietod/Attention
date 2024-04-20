@@ -32,7 +32,7 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 
 NUMBER_OF_CLASSES: int = 6
 
-MODEL_NAME: Literal["EncoderModel", "PytorchModel"] = "PytorchModel"
+MODEL_NAME: Literal["EncoderModel", "PytorchModel", "LocalModel"] = "LocalModel"
 
 
 def main() -> None:
@@ -49,9 +49,15 @@ def main() -> None:
     # load data
     train_data: DataLoader
     val_data: DataLoader
-    train_data, val_data, test_data, vocab_to_int, i_, _, int_to_target = load_text_data(
-        DATA_PATH, DATASET_NAME, batch_size=params["batch_size"]
-    )
+    (
+        train_data,
+        val_data,
+        test_data,
+        vocab_to_int,
+        i_,
+        _,
+        int_to_target,
+    ) = load_text_data(DATA_PATH, DATASET_NAME, batch_size=params["batch_size"])
 
     # define name and writer
     name: str = (

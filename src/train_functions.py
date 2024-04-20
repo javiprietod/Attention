@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm  # type: ignore
 
 # own modules
-from src.utils import Accuracy, print_confusion_matrix
+from src.utils import Accuracy, print_confusion_matrix, set_seed
 
 
 def train_step(
