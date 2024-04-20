@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import DataLoader
 from torch.jit import RecursiveScriptModule
 
+from typing import Literal
+
 # own modules
 from src.utils import (
     load_text_data,
@@ -21,6 +23,7 @@ torch.set_num_threads(8)
 
 # static variables
 DATA_PATH: str = "data"
+DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 
 
 def main(name: str) -> float:
@@ -30,7 +33,7 @@ def main(name: str) -> float:
     # load data
     test_data: DataLoader
     _, _, test_data, _, _, _, int_to_target = load_text_data(
-        DATA_PATH, batch_size=int(name.split("_")[-3])
+        DATA_PATH, name.split("_")[1], batch_size=int(name.split("_")[-9])
     )
 
     # define model
@@ -43,4 +46,6 @@ def main(name: str) -> float:
 
 
 if __name__ == "__main__":
-    print(f"accuracy: {main('model_0.0006_1024_16_15_2')}")
+    print(
+        f"accuracy: {main('KernelizedLinformerModel_emotions_lr_0.01_batch_4_hidden_128_encoders_1_embedding_128_heads_1')}"
+    )

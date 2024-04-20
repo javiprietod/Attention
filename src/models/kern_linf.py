@@ -173,7 +173,7 @@ class KernelizedLinformerAttention(torch.nn.Module):
         )
 
         # output: [B, S, N, M]
-        output = output * torch.exp(-(norm_x**2) / 2) / self.mapping_dim
+        output = output * torch.exp(-(norm_x**2) / 2) / math.sqrt(self.mapping_dim)
 
         return output
 
