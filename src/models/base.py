@@ -169,7 +169,7 @@ class EncoderModel(torch.nn.Module):
                 Dimensions: [batch, sequence]
 
         Returns:
-            batch of predictions. 
+            batch of predictions.
                 Dimensions: [batch, num_classes].
         """
 
@@ -263,7 +263,7 @@ class PytorchModel(torch.nn.Module):
                 Dimensions: [batch, sequence]
 
         Returns:
-            batch of predictions. 
+            batch of predictions.
                 Dimensions: [batch, num_classes].
         """
 
