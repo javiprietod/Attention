@@ -13,7 +13,8 @@ from src.utils import (
 )
 from src.models import (
     SelfAttention,
-    PositionalEncoding, KernelizedAttention,
+    PositionalEncoding,
+    KernelizedAttention,
     LocalAttention,
     LocalAttentionUnFold,
 )
@@ -143,14 +144,12 @@ def test_benchmark(model: torch.nn.Module, data: DataLoader) -> float:
 
 
 def main(
-    attention: torch.nn.Module,
-    data: DataLoader,
-    vocab_to_int: dict[str, int]
+    attention: torch.nn.Module, data: DataLoader, vocab_to_int: dict[str, int]
 ) -> None:
     """
     This function is the main program for all the benchmarks
     """
-    
+
     inputs: torch.Tensor = next(iter(data))[0]
     model = AttentionModel(attention, inputs.shape[1], vocab_to_int).to(device)
     train_time = train_benchmark(model, data)
@@ -165,7 +164,6 @@ def main(
 
 
 if __name__ == "__main__":
-
     # load data
     data: DataLoader
     vocab_to_int: dict[str, int]
@@ -177,9 +175,11 @@ if __name__ == "__main__":
     sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
-        LocalAttentionUnFold(EMBEDDING_DIM, 4, 7, sequence_length),
         SelfAttention(EMBEDDING_DIM, 4),
+        # KernelizedAttention(EMBEDDING_DIM, 4, 0),
+        # LocalAttention(EMBEDDING_DIM, 4, 7),
+        # LocalAttentionUnFold(EMBEDDING_DIM, 4, 7, sequence_length),
         # torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
-        data = data,
-        vocab_to_int = vocab_to_int,
+        data=data,
+        vocab_to_int=vocab_to_int,
     )

@@ -4,6 +4,7 @@ import torch
 # other libraries
 from src.models import PositionalEncoding
 
+from typing import Optional
 import math
 
 EMBEDDING_DIM: int = 256
@@ -24,7 +25,7 @@ class KernelizedAttention(torch.nn.Module):
         self,
         embedding_dim: int,
         num_heads: int,
-        mapping_dim: int | None = None,
+        mapping_dim: Optional[int] = None,
     ) -> None:
         """
         Constructor of the class SelfAttention.

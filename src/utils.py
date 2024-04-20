@@ -281,7 +281,7 @@ def load_text_data(
     int_to_targets = {ii: target for target, ii in targets_to_int.items()}
 
     train_dataset: Dataset
-    
+
     # create datasets
     if dataset_name == "emotions":
         train_dataset = EmotionsDataset(
@@ -341,13 +341,7 @@ def load_benchmark_data(
     start_token: str = "<s>",
     end_token: str = "<e>",
     pad_token: str = "<unk>",
-) -> tuple[
-    DataLoader,
-    dict[str, int],
-    dict[int, str],
-    dict[str, int],
-    dict[int, str],
-]:
+) -> tuple[DataLoader, dict[str, int], dict[int, str], dict[str, int], dict[int, str],]:
     """
     This function returns two Dataloaders, one for train data and
     other for validation data for text dataset.
