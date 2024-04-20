@@ -4,12 +4,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 # other libraries
-from tqdm.auto import tqdm  # type: ignore
+from tqdm.auto import tqdm
 import json
 from typing import Literal
 
 # own modules
-from src.models import EncoderModel, PytorchModel, LocalModel
+from src.models import EncoderModel, KernelizedModel, PytorchModel, LocalModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -32,7 +32,7 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 
 NUMBER_OF_CLASSES: int = 6
 
-MODEL_NAME: Literal["EncoderModel", "PytorchModel", "LocalModel"] = "LocalModel"
+MODEL_NAME: Literal["EncoderModel", "PytorchModel", "LocalModel", "KernelizedModel"] = "LocalModel"
 
 
 def main() -> None:
@@ -49,15 +49,9 @@ def main() -> None:
     # load data
     train_data: DataLoader
     val_data: DataLoader
-    (
-        train_data,
-        val_data,
-        test_data,
-        vocab_to_int,
-        i_,
-        _,
-        int_to_target,
-    ) = load_text_data(DATA_PATH, DATASET_NAME, batch_size=params["batch_size"])
+    train_data, val_data, test_data, vocab_to_int, i_, _, int_to_target = load_text_data(
+        DATA_PATH, DATASET_NAME, batch_size=params["batch_size"]
+    )
 
     # define name and writer
     name: str = (

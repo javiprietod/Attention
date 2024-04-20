@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import tqdm  # type: ignore
+from tqdm.auto import tqdm
 
 # own modules
 from src.utils import Accuracy, print_confusion_matrix, set_seed
