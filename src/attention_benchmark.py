@@ -25,7 +25,7 @@ torch.set_num_threads(8)
 # static variables
 DATA_PATH: str = "data"
 
-EMBEDDING_DIM: int = 256
+EMBEDDING_DIM: int = 128
 NUM_CLASSES: int = 2
 
 
@@ -54,8 +54,7 @@ class AttentionModel(torch.nn.Module):
         try:
             x = self.attention(x)
         except:
-            # multihead attention
-            x, _ = self.attention(x, x, x) 
+            x, _ = self.attention(x, x, x)
         x = x.view(x.size(0), -1)
         return self.linear(x)
 
@@ -138,37 +137,29 @@ def test_benchmark(model: torch.nn.Module, data: DataLoader) -> float:
 
 
 def main(
-    attention1: torch.nn.Module,
-    attention2: torch.nn.Module,
+    attention: torch.nn.Module,
     data: DataLoader,
-    vocab_to_int: dict[str, int],
+    vocab_to_int: dict[str, int]
 ) -> None:
     """
     This function is the main program for all the benchmarks
     """
-
+    
     inputs: torch.Tensor = next(iter(data))[0]
-    model1 = AttentionModel(attention1, inputs.shape[1], vocab_to_int).to(device)
-    model2 = AttentionModel(attention2, inputs.shape[1], vocab_to_int).to(device)
-
-    train_time1 = train_benchmark(model1, data)
-    test_time1 = test_benchmark(model1, data)
-    train_time2 = train_benchmark(model2, data)
-    test_time2 = test_benchmark(model2, data)
-
-    model_name1 = attention1.__class__.__name__
-    model_name2 = attention2.__class__.__name__
+    model = AttentionModel(attention, inputs.shape[1], vocab_to_int).to(device)
+    train_time = train_benchmark(model, data)
+    test_time = test_benchmark(model, data)
+    model_name = attention.__class__.__name__
 
     print("-" * 50)
-    print(f"Train time for {model_name1}: {train_time1}")
-    print(f"Train time for {model_name2}: {train_time2}")
+    print(f"Train time for {model_name}: {train_time}")
     print("-" * 50)
-    print(f"Test time for {model_name1}: {test_time1}")
-    print(f"Test time for {model_name2}: {test_time2}")
+    print(f"Test time for {model_name}: {test_time}")
     print("-" * 50)
 
 
 if __name__ == "__main__":
+
     # load data
     data: DataLoader
     vocab_to_int: dict[str, int]
@@ -177,11 +168,11 @@ if __name__ == "__main__":
         batch_size=16,
         percent=0.005,
     )
-    sequence_length: int = next(iter(data))[0].shape[1]
+    sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
         SelfAttention(EMBEDDING_DIM, 4),
-        torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
-        data,
-        vocab_to_int,
+        # torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
+        data = data,
+        vocab_to_int = vocab_to_int,
     )
