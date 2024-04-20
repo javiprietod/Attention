@@ -47,5 +47,5 @@ def main(name: str) -> float:
 
 if __name__ == "__main__":
     print(
-        f"accuracy: {main('KernelizedModel_emotions_lr_0.0006_batch_16_hidden_128_encoders_2_embedding_128_heads_4')}"
+        f"accuracy: {main('KernelizedLinformerModel_emotions_lr_0.01_batch_4_hidden_128_encoders_1_embedding_128_heads_1')}"
     )

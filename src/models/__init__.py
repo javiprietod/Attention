@@ -7,6 +7,6 @@ from src.models.base import (
 from src.models.local import LocalAttention, LocalAttentionUnFold, LocalModel
 from src.models.kernelized_model import KernelizedModel, KernelizedAttention
 from src.models.linformer2 import LinformerSelfAttention, LinformerModel
-from src.models.kern_linf import KernelizedLinformerModel
+from src.models.kern_linf import KernelizedLinformerAttention, KernelizedLinformerModel
 
 
