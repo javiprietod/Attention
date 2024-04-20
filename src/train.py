@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 # other libraries
-from tqdm.auto import tqdm  # type: ignore
+from tqdm.auto import tqdm
 import json
 from typing import Literal
 
@@ -32,7 +32,9 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 
 NUMBER_OF_CLASSES: int = 6
 
-MODEL_NAME: Literal["EncoderModel", "PytorchModel", "KernelizedModel"] = "KernelizedModel"
+MODEL_NAME: Literal["EncoderModel", "PytorchModel", "KernelizedModel"] = (
+    "KernelizedModel"
+)
 
 
 def main() -> None:
@@ -49,7 +51,7 @@ def main() -> None:
     # load data
     train_data: DataLoader
     val_data: DataLoader
-    train_data, val_data, test_data, vocab_to_int, i_, _, int_to_target = load_text_data(
+    train_data, val_data, test_data, vocab_to_int, _, _, int_to_target = load_text_data(
         DATA_PATH, DATASET_NAME, batch_size=params["batch_size"]
     )
 

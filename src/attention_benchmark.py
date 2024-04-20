@@ -3,8 +3,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from time import perf_counter
-from tqdm.auto import tqdm  # type: ignore
-from memory_profiler import profile  # type: ignore
+from tqdm.auto import tqdm
+from memory_profiler import profile
 
 # own modules
 from src.utils import (
@@ -55,7 +55,7 @@ class AttentionModel(torch.nn.Module):
             x = self.attention(x)
         except:
             # multihead attention
-            x, _ = self.attention(x, x, x) 
+            x, _ = self.attention(x, x, x)
         x = x.view(x.size(0), -1)
         return self.linear(x)
 
