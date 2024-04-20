@@ -1,12 +1,10 @@
 # deep learning libraries
 import torch
-import torch.nn.functional as F
 
 # other libraries
-import math
-import numpy as np
-
 from src.models import PositionalEncoding
+
+import math
 
 EMBEDDING_DIM: int = 256
 NUM_CLASSES: int = 2
@@ -19,7 +17,7 @@ device: torch.device = (
 
 class KernelizedAttention(torch.nn.Module):
     """
-    Normalized Kernelized Attention with RPE using FFT.
+    Normalized Kernelized Attention.
     """
 
     def __init__(
@@ -32,9 +30,9 @@ class KernelizedAttention(torch.nn.Module):
         Constructor of the class SelfAttention.
 
         Args:
-            embedding_dim: input channels of the module.
+            embedding_dim: embedding dimension of the model.
             num_heads: number of heads in the multi-head attention.
-            mapping_dim: mapping dimension of the kernelized attention.
+            mapping_dim: dimension of the phi-mapping.
         """
 
         super().__init__()
@@ -54,43 +52,23 @@ class KernelizedAttention(torch.nn.Module):
             num_heads, self.mapping_dim, embedding_dim // num_heads
         ).to(device)
 
-        # self.pos_encoding = torch.randn(
-        #     2 * seq_length - 1, requires_grad=True, dtype=torch.cdouble
-        # ).to(device)
-
-        # self.n = seq_length
-        # w = np.exp(np.pi * 2j / seq_length)
-
-        # # We compute the FFT matrix
-        # self.F_2n = torch.tensor(
-        #     [
-        #         [w ** (i * j) for j in range(2 * seq_length)]
-        #         for i in range(2 * seq_length)
-        #     ]
-        # )
-        # self.F_2n_inv = torch.tensor(
-        #     [
-        #         [w ** (-i * j) for j in range(2 * seq_length)]
-        #         for i in range(2 * seq_length)
-        #     ]
-        # )
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        This method returns the output of the self attention module.
+        This method returns the output of the kernelized attention module.
 
         Args:
             x: input tensor.
-                Dimensions: [batch, sequence, channels].
+                Dimensions: [batch, sequence, embedding_dim].
 
         Returns:
-            output of the self attention module.
+            output of the kernelized attention module.
         """
 
         q: torch.Tensor = self.q(x)
         k: torch.Tensor = self.k(x)
         v: torch.Tensor = self.v(x)
 
+        # q, k, v: FROM [B, N, E] TO [B, N, H, E//H]
         q = q.view(
             x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
         )
@@ -103,38 +81,34 @@ class KernelizedAttention(torch.nn.Module):
 
         q = q / torch.norm(q)
         k = k / torch.norm(k)
-        #
-        # c = torch.exp(self.pos_encoding)
 
-        # Size of both: [B, N, H, M]
+        # phi_q, phi_k: FROM [B, N, H, E//N] TO [B, N, H, M]
         phi_q = self.phi(q)
         phi_k = self.phi(k)
 
-        # Size: [B, H, N, M]
+        # phi_q, phi_k: FROM [B, N, H, M] TO [B, H, N, M]
         phi_q = phi_q.transpose(1, 2)
         phi_k = phi_k.transpose(1, 2)
 
-        # Size: [B, H, N, E//H]
+        # v: FROM [B, N, H, E//N] TO [B, H, N, E//H]
         v = v.transpose(1, 2)
 
-        # Size: [B, H, N, M]
+        # A2: [B, H, N, M]
         A2 = phi_k
 
-        # [B, H, N, M] x [B, H, N, E//H] = [B, H, N, M, E//H]
+        # A1: [B, H, N, M] x [B, H, N, E//H] = [B, H, N, M, E//H]
         A1 = torch.einsum("...d,...e->...de", phi_k, v)
 
-        # D1: [B, H, N, M, E//H]
-        # D1 = self.FFTmatmul(c, A1)
-
-        # D2: [B, H, N, M]
-        # D2 = self.FFTmatmul(c, A2)
-
+        # num: [B, H, N, M] x [B, H, N, M, E//H] = [B, H, N, E//H]
         num = torch.einsum("abcd,abcde->abce", phi_q, A1)
+
+        # den: [B, H, N, M] x [B, H, N, M] = [B, H, N]
         den = torch.einsum("abcd,abcd->abc", phi_q, A2).unsqueeze(-1)
 
+        # output: [B, H, N, E//H]
         output: torch.Tensor = num / den
 
-        # Output: [B, N, E]
+        # output: FROM [B, H, N, E//H] TO [B, N, E]
         output = (
             output.transpose(1, 2)
             .contiguous()
@@ -163,51 +137,14 @@ class KernelizedAttention(torch.nn.Module):
         )
 
         # output: [B, N, H, M]
-        output = output * torch.exp(-(norm_x**2) / 2) / self.mapping_dim
+        output = output * torch.exp(-(norm_x**2) / 2) / math.sqrt(self.mapping_dim)
 
         return output
-
-    def FFTmatmul(self, c: torch.Tensor, mat: torch.Tensor) -> torch.Tensor:
-        """
-        FFT matrix multiplication based on algorithm described in:
-        https://alinush.github.io/2020/03/19/multiplying-a-vector-by-a-toeplitz-matrix.html
-
-        Args:
-            ...
-
-        Returns:
-            ...
-        """
-        # We compute the representation vector
-        a_2n = torch.cat(
-            (
-                torch.tensor([c[self.n]]),
-                torch.flip(c[: self.n], dims=[0]),
-                torch.tensor([c[self.n]]),
-                torch.flip(c[self.n + 1 :], dims=[0]),
-            )
-        )
-
-        # DFT(a_2n) - [2n]
-        dft_a_2n = torch.einsum("ab,b->a", self.F_2n, a_2n)
-
-        # Pad n 0s in A1 to increase 3rd dimension to 2n
-        F_2n = self.F_2n[:, : self.n]
-
-        dft_mat = torch.einsum("ab,xyb...->xya...", F_2n, mat.to(torch.complex128))
-
-        # DFT(A1) * DFT(a_2n)
-        dft_mat = torch.einsum("a,xya...->xya...", dft_a_2n, dft_mat)
-
-        # Inverse DFT
-        output: torch.Tensor = torch.einsum("ab,xyb...->xya...", self.F_2n_inv, dft_mat)
-
-        return output[: self.n].to(torch.float64)
 
 
 class KernelizedModel(torch.nn.Module):
     """
-    Model constructed used Block modules.
+    Model constructed based on KernelizedAttention.
     """
 
     def __init__(
@@ -223,11 +160,17 @@ class KernelizedModel(torch.nn.Module):
         **kwargs,
     ) -> None:
         """
-        Constructor of the class CNNModel.
+        Constructor of the class KernelizedModel.
 
         Args:
-            layers: output channel dimensions of the Blocks.
+            hidden_size: hidden size of the model.
+            vocab_to_int: dictionary of vocabulary to integers.
             sequence_length: input channels of the model.
+            num_classes: output channels of the model.
+            encoders: number of encoders in the model.
+            embedding_dim: embedding dimension of the model.
+            num_heads: number of heads in the multi-head attention.
+            mapping_dim: dimension of the phi-mapping.
         """
 
         super().__init__()
@@ -268,15 +211,14 @@ class KernelizedModel(torch.nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
-        This method returns a batch of logits.
-        It is the output of the neural network.
-
+        This method returns a batch of predictions.
         Args:
-            inputs: batch of images.
-                Dimensions: [batch, channels, height, width].
+            inputs: batch of texts.
+                Dimensions: [batch, sequence]
 
         Returns:
-            batch of logits. Dimensions: [batch, num_classes].
+            batch of predictions.
+                Dimensions: [batch, num_classes].
         """
 
         x = self.embeddings(inputs)
@@ -285,11 +227,11 @@ class KernelizedModel(torch.nn.Module):
         for _ in range(self.encoders):
             attention_x = self.self_attention(x)
 
-            x = self.normalization(attention_x)
+            x = self.normalization(attention_x) + x
 
-            x = self.fc(x) + x
+            fc_x = self.fc(x)
 
-            x = self.normalization(x)
+            x = self.normalization(fc_x) + x
 
         x = x.view(x.size(0), -1)
 
