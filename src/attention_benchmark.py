@@ -188,6 +188,7 @@ if __name__ == "__main__":
         # LocalAttention(EMBEDDING_DIM, 4, 7),
         # LocalAttentionUnFold(EMBEDDING_DIM, 4, 7, sequence_length),
         # torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
+        # LinformerSelfAttention(EMBEDDING_DIM, sequence_length, 4),
         data=data,
         vocab_to_int=vocab_to_int,
     )
