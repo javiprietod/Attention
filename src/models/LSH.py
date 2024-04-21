@@ -8,29 +8,26 @@ import math
 class LSHmodule(torch.nn.Module):
 
     """
-    Self attention module.
+    LSH attention module.
     """
 
-    def __init__(self, embedding_dim: int, num_heads: int, n_buckets:int = 64) -> None:
+    def __init__(self, embedding_dim: int, num_heads: int, n_buckets:int = 32, partition_size:int = 40) -> None:
         """
         Constructor of the class SelfAttention.
 
         Args:
             embedding_dim: input channels of the module.
-            sequence_length: input channels of the module.
-            num_classes: output channels of the module.
             num_heads: number of heads in the multi-head attention.
-            mask: mask tensor for padding values. Dimensions: [batch, sequence].
-            n_buckets: number of buckets for the LSH module. If not a power of 2, it will be rounded to the previous power of 2.
+            n_buckets: number of buckets for the LSH module. 
+            If not a power of 2, it will be rounded to the previous power of 2.
         """
-
-        # problema con las dimensiones de los hyperplanes, no se debido el batch y todo como multiplicarlo bien, preguntar Alex o Prt
 
         super().__init__()
         self.num_heads = num_heads
         self.embedding_dim = embedding_dim
         self.n_buckets = n_buckets
         self.n_hyperplanes = int(math.log2(n_buckets))
+        self.partition_size = partition_size
 
         self.q = torch.nn.Linear(embedding_dim, embedding_dim)
         self.v = torch.nn.Linear(embedding_dim, embedding_dim)
@@ -38,7 +35,7 @@ class LSHmodule(torch.nn.Module):
         self.hyperplanes = torch.randn(embedding_dim//num_heads + 1, self.n_hyperplanes)
 
     def get_buckets(self, x: torch.Tensor):
-        """Function that maps a batch of words and its embeddings into batches of buckets.
+        """Function that maps the embeddings of words into buckets.
 
         Args:
             x: input tensor
@@ -54,13 +51,39 @@ class LSHmodule(torch.nn.Module):
         # Calculate the dot product between the embeddings and the hyperplanes to get the buckets
         hyperplanes = self.hyperplanes
 
-        buckets = torch.einsum('bshe,en->bshn', x, hyperplanes)
+        # Size: [batch, sequence, num_heads, n_hyperplanes]
+        buckets = torch.einsum('bnhe,ey->bnhy', x, hyperplanes)
         buckets = torch.where(buckets >= 0, torch.ones_like(buckets), torch.zeros_like(buckets))
         
         # Convert the binary representation of the buckets to decimal
         buckets = torch.einsum('bshn,n->bsh', buckets, 2 ** torch.arange(self.n_hyperplanes).to(torch.float32))
 
         return buckets
+    
+    def adjust_buckets(self, buckets):
+        partition_size = self.partition_size
+        # Flatten the buckets tensor
+        flattened_buckets = buckets.view(-1)
+        
+        # Count the frequency of each element
+        counts = flattened_buckets.bincount()
+        new_buckets = torch.zeros_like(flattened_buckets)
+        new_value = 0
+        for i, count in enumerate(counts):
+            if count <= partition_size:
+                new_buckets[flattened_buckets == i] = new_value
+                new_value += 1
+            else:
+                while count > 0:
+                    new_buckets[flattened_buckets == i] = new_value
+                    flattened_buckets[flattened_buckets == i] = new_value
+                    new_value += 1
+                    count -= partition_size
+
+
+        # Reshape new_buckets to match the shape of buckets
+        new_buckets = new_buckets.view(buckets.size())
+        return new_buckets
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -74,47 +97,51 @@ class LSHmodule(torch.nn.Module):
             output of the self attention module.
                 Dimensions: [batch, sequence, channels].
         """
-
+        x_size = x.size()
         q: torch.Tensor = self.q(x)
         v: torch.Tensor = self.v(x)
 
+        # Size: [batch, sequence, num_heads, embedding_dim // num_heads]
         q = q.view(
-            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
+            x_size[0], x_size[1], self.num_heads, self.embedding_dim // self.num_heads
         )
         v = v.view(
-            x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
+            x_size[0], x_size[1], self.num_heads, self.embedding_dim // self.num_heads
         )
 
-        # Obtenemos los buckets
+        # Size: [batch, sequence, num_heads]
         buckets = self.get_buckets(q)
+        
+        # imprimimos la distribución de los buckets para ver si es uniforme
+        # input(buckets.int().view(-1).bincount()) 
+
+        # buckets = self.adjust_buckets(buckets.int())
+        
+        # imprimimos la distribución de los buckets para ver si es uniforme
+        # print(buckets.int().view(-1).bincount()) 
+        
+
+        # buckets = buckets.view(x_size[0] * x_size[1], self.num_heads)
+
+        one_hot_buckets = torch.nn.functional.one_hot(buckets.long(), num_classes=self.n_buckets)
 
         q = q.transpose(1, 2)
         v = v.transpose(1, 2)
-
-
-        # Vamos a crear mascaras para cada bucket
-        masks = []
-        for i in range(self.n_buckets):
-            mask = torch.where(buckets == i, torch.ones_like(buckets), torch.zeros_like(buckets)).to(torch.bool)
-            masks.append(mask)
-        masks = torch.stack(masks)
         
-        masks = masks.transpose(2,3)
-        try_q = q.masked_fill(masks.unsqueeze(4),0)
-        attention = torch.matmul(try_q,try_q.transpose(3,4)) / math.sqrt(self.embedding_dim)
+        # Size: [n_buckets, batch, num_heads, sequence, embedding_dim // num_heads]
+        q_masked = torch.einsum('bhne,bnhc->cbhne',q,one_hot_buckets)
+        # q_masked = q.masked_fill(masks.unsqueeze(4),0)
+        attention = torch.matmul(q_masked,q_masked.transpose(3,4)) / math.sqrt(self.embedding_dim)
         attention = torch.sum(attention, dim=0)
         attention = F.softmax(attention, dim=-1)
-        output = torch.matmul(attention, v)
 
+        output = torch.matmul(attention, v)
         output = (
             output.transpose(1, 2)
             .contiguous()
-            .view(x.size(0), x.size(1), self.embedding_dim)
+            .view(x_size[0], x_size[1], self.embedding_dim)
         )
         return output
-
-
-
 
 class PositionalEncoding(torch.nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):

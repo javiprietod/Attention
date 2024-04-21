@@ -43,4 +43,4 @@ def main(name: str) -> float:
 
 
 if __name__ == "__main__":
-    print(f"accuracy: {main('model_0.0006_1024_16_15_2')}")
+    print(f"accuracy: {main('model_0.06_64_16_10_2')}")
