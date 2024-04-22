@@ -47,42 +47,17 @@ class LSHmodule(torch.nn.Module):
                 Dimensions: [batch, sequence, num_heads].
         """
         # Add a column of ones to the embeddings
-        x = torch.cat([x, torch.ones(x.size(0), x.size(1),x.size(2), 1)], dim=3)
+        x = torch.cat([x, torch.ones(x.size(0), x.size(1), x.size(2), 1, device=x.device, dtype=x.dtype)], dim=3)
 
         # Calculate the dot product between the embeddings and the hyperplanes to get the buckets
         # Size: [batch, sequence, num_heads, n_hyperplanes]
         buckets = torch.einsum('bnhe,ey->bnhy', x, self.hyperplanes)
-        buckets = torch.where(buckets >= 0, torch.ones_like(buckets), torch.zeros_like(buckets))
-        
+        buckets = (buckets >= 0).to(torch.float32)
+
         # Convert the binary representation of the buckets to decimal
-        buckets = torch.einsum('bshn,n->bsh', buckets, 2 ** torch.arange(self.n_hyperplanes).to(torch.float32))
+        buckets = torch.einsum('bshn,n->bsh', buckets, 2 ** torch.arange(self.n_hyperplanes, device=x.device, dtype=x.dtype))
 
         return buckets
-    
-    def adjust_buckets(self, buckets):
-        partition_size = self.partition_size
-        # Flatten the buckets tensor
-        flattened_buckets = buckets.view(-1)
-        
-        # Count the frequency of each element
-        counts = flattened_buckets.bincount()
-        new_buckets = torch.zeros_like(flattened_buckets)
-        new_value = 0
-        for i, count in enumerate(counts):
-            if count <= partition_size:
-                new_buckets[flattened_buckets == i] = new_value
-                new_value += 1
-            else:
-                while count > 0:
-                    new_buckets[flattened_buckets == i] = new_value
-                    flattened_buckets[flattened_buckets == i] = new_value
-                    new_value += 1
-                    count -= partition_size
-
-
-        # Reshape new_buckets to match the shape of buckets
-        new_buckets = new_buckets.view(buckets.size())
-        return new_buckets
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -113,33 +88,19 @@ class LSHmodule(torch.nn.Module):
         
         q = q.transpose(1, 2)
         v = v.transpose(1, 2)
-        # imprimimos la distribución de los buckets para ver si es uniforme
-        # input(buckets.int().view(-1).bincount()) 
 
-        # buckets = self.adjust_buckets(buckets.int())
-        
         # imprimimos la distribución de los buckets para ver si es uniforme
-        #
-        # 
-        
-        
-        
         # print(buckets.int().view(-1).bincount()) 
         
 
-        # buckets = buckets.view(x_size[0] * x_size[1], self.num_heads)
-
-        one_hot_buckets = torch.nn.functional.one_hot(buckets.long(), num_classes=self.n_buckets).int()
+        one_hot_buckets = F.one_hot(buckets.long(), num_classes=self.n_buckets).int()
         
+        # Probar esto a ver si falla el benchmark tb 
         # masks = []
-        # i_masks = []
         # for i in range(self.n_buckets):
         #     mask = torch.where(buckets == i, torch.ones_like(buckets), torch.zeros_like(buckets)).to(torch.bool)
         #     masks.append(mask)
-        #     mask = torch.where(buckets == i, torch.ones_like(buckets), torch.zeros_like(buckets))
-        #     i_masks.append(mask)
         # masks = torch.stack(masks)
-        # i_masks = torch.stack(i_masks)
 
         # masks = masks.transpose(2,3)
         # try_q = q.masked_fill(masks.unsqueeze(4),0)
