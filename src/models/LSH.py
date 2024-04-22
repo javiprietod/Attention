@@ -54,7 +54,7 @@ class LSHAttention(torch.nn.Module):
             buckets: buckets of the embeddings
                 Dimensions: [batch, sequence, num_heads].
         """
-        # Add a column of ones to the embeddings
+        # Add a column of ones to the embeddings to allow for the bias term
         x = torch.cat(
             [
                 x,
@@ -65,18 +65,18 @@ class LSHAttention(torch.nn.Module):
             dim=3,
         )
 
-        # Calculate the dot product between the embeddings and the hyperplanes to get the buckets
-        # Size: [batch, sequence, num_heads, n_hyperplanes]
-        buckets = torch.einsum("bnhe,ey->bnhy", x, self.hyperplanes)
+        # Calculate the dot product between the embeddings and the hyperplanes, then threshold to get the buckets
+        # Size: [B, N, H, n_hyperplanes]
+        buckets = torch.einsum('bnhe,ey->bnhy', x, self.hyperplanes)
         buckets = (buckets >= 0).to(torch.float32)
 
         # Convert the binary representation of the buckets to decimal
+        # Size: [B, N, H]
         buckets = torch.einsum(
-            "bshn,n->bsh",
+            "bnhd,d->bnh",
             buckets,
             2 ** torch.arange(self.n_hyperplanes, device=x.device, dtype=x.dtype),
         )
-
         return buckets
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -95,7 +95,7 @@ class LSHAttention(torch.nn.Module):
         q: torch.Tensor = self.q(x)
         v: torch.Tensor = self.v(x)
 
-        # Size: [batch, sequence, num_heads, embedding_dim // num_heads]
+        # Size: [B, N, H, E/H]
         q = q.view(
             x_size[0], x_size[1], self.num_heads, self.embedding_dim // self.num_heads
         )
@@ -103,42 +103,25 @@ class LSHAttention(torch.nn.Module):
             x_size[0], x_size[1], self.num_heads, self.embedding_dim // self.num_heads
         )
 
-        # Size: [batch, sequence, num_heads]
+        # Get a matrix of the buckets of q [B, N, H]
         buckets = self.get_buckets(q)
 
         q = q.transpose(1, 2)
         v = v.transpose(1, 2)
 
-        # imprimimos la distribución de los buckets para ver si es uniforme
-        # print(buckets.int().view(-1).bincount())
-
+        # One hot encode the vectors to the bucket it's on [C, B, N, H]
         one_hot_buckets = F.one_hot(buckets.long(), num_classes=self.n_buckets).int()
+        one_hot_buckets = torch.einsum('bnhc->cbhn',one_hot_buckets)
 
-        # Probar esto a ver si falla el benchmark tb
-        # masks = []
-        # for i in range(self.n_buckets):
-        #     mask = torch.where(buckets == i, torch.ones_like(buckets), torch.zeros_like(buckets)).to(torch.bool)
-        #     masks.append(mask)
-        # masks = torch.stack(masks)
+        # Multiply the vectors in the same bucket [C, B, H, E/H, E/H]
+        q = q.masked_fill(one_hot_buckets.to(torch.bool).unsqueeze(4),0)
+        attention = torch.matmul(q,q.transpose(3,4)) / math.sqrt(self.embedding_dim)
 
-        # masks = masks.transpose(2,3)
-        # try_q = q.masked_fill(masks.unsqueeze(4),0)
-        # attention = torch.matmul(try_q,try_q.transpose(3,4)) / math.sqrt(self.embedding_dim)
-
-        a = torch.einsum("bnhc->cbhn", one_hot_buckets)
-        a_a = q.masked_fill(a.to(torch.bool).unsqueeze(4), 0)
-        attention = torch.matmul(a_a, a_a.transpose(3, 4)) / math.sqrt(
-            self.embedding_dim
-        )
-
-        # # Size: [n_buckets, batch, num_heads, sequence, embedding_dim // num_heads]
-        # q_masked = torch.einsum('bhne,bnhc->cbhne',q,one_hot_buckets)
-        # # q_masked = q.masked_fill(masks.unsqueeze(4),0)
-        # attention_2 = torch.matmul(q_masked,q_masked.transpose(3,4)) / math.sqrt(self.embedding_dim)
-
+        # Remove the bucket dimension and apply softmax [B, H, N, N]
         attention = torch.sum(attention, dim=0)
         attention = F.softmax(attention, dim=-1)
 
+        # Multiply the attention with the values and reshape [B, N, E]
         output = torch.matmul(attention, v)
         output = (
             output.transpose(1, 2)
