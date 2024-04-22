@@ -9,7 +9,15 @@ import json
 from typing import Literal
 
 # own modules
-from src.models import EncoderModel, KernelizedModel, PytorchModel, LocalModel, LinformerModel, KernelizedLinformerModel, LSHModel
+from src.models import (
+    EncoderModel,
+    KernelizedModel,
+    PytorchModel,
+    LocalModel,
+    LinformerModel,
+    KernelizedLinformerModel,
+    LSHModel,
+)
 from src.utils import (
     load_text_data,
     save_model,
@@ -33,7 +41,13 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 NUMBER_OF_CLASSES: int = 6
 
 MODEL_NAME: Literal[
-    "EncoderModel", "PytorchModel", "LocalModel", "KernelizedModel", "LinformerModel", "KernelizedLinformerModel", "LSHModel"
+    "EncoderModel",
+    "PytorchModel",
+    "LocalModel",
+    "KernelizedModel",
+    "LinformerModel",
+    "KernelizedLinformerModel",
+    "LSHModel",
 ] = "KernelizedLinformerModel"
 
 
@@ -56,15 +70,17 @@ def main() -> None:
         val_data,
         test_data,
         vocab_to_int,
-        i_,
+        _,
         _,
         int_to_target,
     ) = load_text_data(DATA_PATH, DATASET_NAME, batch_size=params["batch_size"])
 
     # define name and writer
     name: str = (
-        f"{MODEL_NAME}_{DATASET_NAME}_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
-        f"_encoders_{params['encoders']}_embedding_{params['embedding_dim']}_heads_{params['num_heads']}"
+        f"{MODEL_NAME}_{DATASET_NAME}_lr_{params['lr']}"
+        f"_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
+        f"_encoders_{params['encoders']}_embedding"
+        f"_{params['embedding_dim']}_heads_{params['num_heads']}"
     )
     writer: SummaryWriter = SummaryWriter(f"runs/{MODEL_NAME}/{name}")
 

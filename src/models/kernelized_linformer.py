@@ -60,9 +60,11 @@ class KernelizedLinformerAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.embedding_dim = embedding_dim
 
-        # Linformer parameters
+        # Linformer parameters
         self.eps = 0.9
-        self.l = int(5*math.log(sequence_length * embedding_dim) / self.eps)  # linformer l dimension of proyection of n (sequence length)
+        self.l = int(
+            5 * math.log(sequence_length * embedding_dim) / self.eps
+        )  # linformer l dimension of proyection of n (sequence length)
         self.sigma = 1 / (2**sequence_length)
 
         # Proyection matrices E and F
@@ -80,7 +82,11 @@ class KernelizedLinformerAttention(torch.nn.Module):
         self.k = torch.nn.Linear(embedding_dim, embedding_dim)
         self.v = torch.nn.Linear(embedding_dim, embedding_dim)
 
-        self.mapping_dim = mapping_dim // num_heads if mapping_dim is not None else embedding_dim // num_heads
+        self.mapping_dim = (
+            mapping_dim // num_heads
+            if mapping_dim is not None
+            else embedding_dim // num_heads
+        )
         self.weights = torch.randn(
             num_heads, self.mapping_dim, embedding_dim // num_heads
         ).to(device)
@@ -113,8 +119,8 @@ class KernelizedLinformerAttention(torch.nn.Module):
             x.size(0), x.size(1), self.num_heads, self.embedding_dim // self.num_heads
         )
 
-        q = q / torch.norm(q) # (batch, n, head, embedding_dim)
-        k = k / torch.norm(k) # (batch, n, head, embedding_dim)
+        q = q / torch.norm(q)  # (batch, n, head, embedding_dim)
+        k = k / torch.norm(k)  # (batch, n, head, embedding_dim)
 
         # Size of both: [B, N, H, M//H]
         phi_q = self.phi(q)
@@ -134,11 +140,11 @@ class KernelizedLinformerAttention(torch.nn.Module):
         v = torch.einsum("bnhe,nl->bhle", v, self.F)
 
         # [B, H, M//H, L] @ [B, H, L, E//H] -> [B, H, M//H, E//H]
-        A1 = torch.matmul(phi_k.transpose(2,3), v)
-        
+        A1 = torch.matmul(phi_k.transpose(2, 3), v)
+
         # [B, H, N, M//H] @ [B, H, M//H, E//H] -> [B, H, N, E//H]
         num = torch.matmul(phi_q, A1)
-        
+
         # [B, H, N, M//H] @ [B, H, N, M//H] -> [B, H, N] -> [B, H, N, 1]
         den = torch.einsum("abcd,abcd->abc", phi_q, A2).unsqueeze(-1)
 
@@ -258,7 +264,7 @@ class KernelizedLinformerModel(torch.nn.Module):
         encoders: int = 6,
         embedding_dim: int = 100,
         num_heads: int = 4,
-        mapping_dim: int = 0, 
+        mapping_dim: int = 0,
         **kwargs
     ) -> None:
         """
@@ -287,7 +293,7 @@ class KernelizedLinformerModel(torch.nn.Module):
         # self-attention
         self.self_attention = KernelizedLinformerAttention(
             embedding_dim, num_heads, mapping_dim, sequence_length
-        )   
+        )
 
         # mlp
         self.fc = torch.nn.Sequential(
@@ -328,7 +334,7 @@ class KernelizedLinformerModel(torch.nn.Module):
 
             x = self.normalization(attention_x) + x
 
-            fc_x = self.fc(x) 
+            fc_x = self.fc(x)
 
             x = self.normalization(fc_x) + x
 

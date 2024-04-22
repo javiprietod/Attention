@@ -43,7 +43,7 @@ DATA_PATH: str = "data"
 
 EMBEDDING_DIM: int = 128
 BATCH_SIZE: int = 16
-LENGTH: int = None # If None, the length of the longest sentence is used
+LENGTH: int | None = None  # If None, the length of the longest sentence is used
 NUM_CLASSES: int = 2
 
 
@@ -84,7 +84,7 @@ def train_pass(
     optimizer: torch.optim.Optimizer,
     loss: torch.nn.Module,
     device: torch.device,
-):
+) -> None:
     """
     This function is used to perform a forward pass the model.
     """
@@ -102,13 +102,15 @@ def train_pass(
         loss_value.backward()
         optimizer.step()
 
+    return None
+
 
 @torch.no_grad()
 def test_pass(
     model: torch.nn.Module,
     test_data: DataLoader,
     device: torch.device,
-):
+) -> None:
     """
     This function is used to perform a forward pass the model.
     """
@@ -118,7 +120,9 @@ def test_pass(
         text = text.to(device)
         label = label.to(device)
 
-        outputs = model(text)
+        _ = model(text)
+
+    return None
 
 
 @profile

@@ -5,20 +5,26 @@ import torch.nn.functional as F
 # other libraries
 import math
 
-class LSHAttention(torch.nn.Module):
 
+class LSHAttention(torch.nn.Module):
     """
     LSH attention module.
     """
 
-    def __init__(self, embedding_dim: int, num_heads: int, n_buckets:int = 32, partition_size:int = 40) -> None:
+    def __init__(
+        self,
+        embedding_dim: int,
+        num_heads: int,
+        n_buckets: int = 32,
+        partition_size: int = 40,
+    ) -> None:
         """
         Constructor of the class SelfAttention.
 
         Args:
             embedding_dim: input channels of the module.
             num_heads: number of heads in the multi-head attention.
-            n_buckets: number of buckets for the LSH module. 
+            n_buckets: number of buckets for the LSH module.
             If not a power of 2, it will be rounded to the previous power of 2.
         """
         seed = 42
@@ -32,8 +38,10 @@ class LSHAttention(torch.nn.Module):
 
         self.q = torch.nn.Linear(embedding_dim, embedding_dim)
         self.v = torch.nn.Linear(embedding_dim, embedding_dim)
-        
-        self.hyperplanes = torch.randn(embedding_dim//num_heads + 1, self.n_hyperplanes)
+
+        self.hyperplanes = torch.randn(
+            embedding_dim // num_heads + 1, self.n_hyperplanes
+        )
 
     def get_buckets(self, x: torch.Tensor):
         """Function that maps the embeddings of words into buckets.
@@ -47,15 +55,27 @@ class LSHAttention(torch.nn.Module):
                 Dimensions: [batch, sequence, num_heads].
         """
         # Add a column of ones to the embeddings
-        x = torch.cat([x, torch.ones(x.size(0), x.size(1), x.size(2), 1, device=x.device, dtype=x.dtype)], dim=3)
+        x = torch.cat(
+            [
+                x,
+                torch.ones(
+                    x.size(0), x.size(1), x.size(2), 1, device=x.device, dtype=x.dtype
+                ),
+            ],
+            dim=3,
+        )
 
         # Calculate the dot product between the embeddings and the hyperplanes to get the buckets
         # Size: [batch, sequence, num_heads, n_hyperplanes]
-        buckets = torch.einsum('bnhe,ey->bnhy', x, self.hyperplanes)
+        buckets = torch.einsum("bnhe,ey->bnhy", x, self.hyperplanes)
         buckets = (buckets >= 0).to(torch.float32)
 
         # Convert the binary representation of the buckets to decimal
-        buckets = torch.einsum('bshn,n->bsh', buckets, 2 ** torch.arange(self.n_hyperplanes, device=x.device, dtype=x.dtype))
+        buckets = torch.einsum(
+            "bshn,n->bsh",
+            buckets,
+            2 ** torch.arange(self.n_hyperplanes, device=x.device, dtype=x.dtype),
+        )
 
         return buckets
 
@@ -85,17 +105,16 @@ class LSHAttention(torch.nn.Module):
 
         # Size: [batch, sequence, num_heads]
         buckets = self.get_buckets(q)
-        
+
         q = q.transpose(1, 2)
         v = v.transpose(1, 2)
 
         # imprimimos la distribución de los buckets para ver si es uniforme
-        # print(buckets.int().view(-1).bincount()) 
-        
+        # print(buckets.int().view(-1).bincount())
 
         one_hot_buckets = F.one_hot(buckets.long(), num_classes=self.n_buckets).int()
-        
-        # Probar esto a ver si falla el benchmark tb 
+
+        # Probar esto a ver si falla el benchmark tb
         # masks = []
         # for i in range(self.n_buckets):
         #     mask = torch.where(buckets == i, torch.ones_like(buckets), torch.zeros_like(buckets)).to(torch.bool)
@@ -106,9 +125,11 @@ class LSHAttention(torch.nn.Module):
         # try_q = q.masked_fill(masks.unsqueeze(4),0)
         # attention = torch.matmul(try_q,try_q.transpose(3,4)) / math.sqrt(self.embedding_dim)
 
-        a = torch.einsum('bnhc->cbhn',one_hot_buckets) 
-        a_a = q.masked_fill(a.to(torch.bool).unsqueeze(4),0)
-        attention = torch.matmul(a_a,a_a.transpose(3,4)) / math.sqrt(self.embedding_dim)
+        a = torch.einsum("bnhc->cbhn", one_hot_buckets)
+        a_a = q.masked_fill(a.to(torch.bool).unsqueeze(4), 0)
+        attention = torch.matmul(a_a, a_a.transpose(3, 4)) / math.sqrt(
+            self.embedding_dim
+        )
 
         # # Size: [n_buckets, batch, num_heads, sequence, embedding_dim // num_heads]
         # q_masked = torch.einsum('bhne,bnhc->cbhne',q,one_hot_buckets)
@@ -125,6 +146,7 @@ class LSHAttention(torch.nn.Module):
             .view(x_size[0], x_size[1], self.embedding_dim)
         )
         return output
+
 
 class PositionalEncoding(torch.nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -147,6 +169,7 @@ class PositionalEncoding(torch.nn.Module):
         """
         x = x + self.pe[: x.size(0)]
         return self.dropout(x)
+
 
 class LSHModel(torch.nn.Module):
     """
@@ -237,7 +260,8 @@ class LSHModel(torch.nn.Module):
         x = x.view(x.size(0), -1)
 
         return self.model(x)
-    
+
+
 class PytorchModel(torch.nn.Module):
     """
     Model constructed used Block modules.

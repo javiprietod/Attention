@@ -1,0 +1,78 @@
+{
+    "EncoderModel": {
+        "epochs": 20,
+        "lr": 6e-4,
+        "batch_size": 16,
+        "hidden_size": 256,
+        "embedding_dim": 128,
+        "encoders": 1,
+        "num_heads": 4,
+        "weight_decay": 1e-4,
+        "step_size": 6,
+        "gamma": 0.4
+    },
+    "LocalModel": {
+        "epochs": 20,
+        "lr": 5e-3,
+        "batch_size": 16,
+        "hidden_size": 256,
+        "embedding_dim": 128,
+        "encoders": 4,
+        "num_heads": 4,
+        "weight_decay": 1e-4,
+        "step_size": 6,
+        "gamma": 0.4,
+        "window_size": 7
+    },
+    "KernelizedModel": {
+        "epochs": 1,
+        "lr": 6e-4,
+        "batch_size": 16,
+        "hidden_size": 128,
+        "embedding_dim": 128,
+        "encoders": 2,
+        "num_heads": 4,
+        "mapping_dim": 64,
+        "weight_decay": 1e-4,
+        "step_size": 12,
+        "gamma": 0.4
+    },
+    "LinformerModel": {
+        "epochs": 20,
+        "lr": 1e-2,
+        "batch_size": 4,
+        "hidden_size": 128,
+        "embedding_dim": 128,
+        "encoders": 1,
+        "num_heads": 1,
+        "weight_decay": 1e-2,
+        "step_size": 8,
+        "gamma": 0.4
+    },
+    "LSHModel": {
+        "epochs": 18,
+        "lr": 1e-3,
+        "batch_size": 16,
+        "hidden_size": 256,
+        "embedding_dim": 128,
+        "encoders": 1,
+        "num_heads": 4,
+        "n_buckets": 4,
+        "weight_decay": 1e-3,
+        "step_size": 8,
+        "gamma": 0.4
+    },
+    "KernelizedLinformerModel": {
+        "epochs": 30,
+        "lr": 1e-2,
+        "batch_size": 4,
+        "hidden_size": 128,
+        "embedding_dim": 128,
+        "encoders": 1,
+        "num_heads": 1,
+        "mapping_dim": 128,
+        "weight_decay": 1e-2,
+        "step_size": 8,
+        "gamma": 0.4
+    }
+}

@@ -13,7 +13,6 @@ __pycache__/
 runs/
 /models/
 nohup.out
-params.json
 
 # Data
 data/

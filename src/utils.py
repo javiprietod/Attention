@@ -25,7 +25,7 @@ class GeneralDataset(Dataset):
         start_token: str = "<s>",
         end_token: str = "<e>",
         pad_token: str = "<unk>",
-        lenght: int = None,
+        length: int | None = None,
     ) -> None:
         """
         This is the constructor of the GeneralDataset class.
@@ -43,9 +43,11 @@ class GeneralDataset(Dataset):
         self.dataset = pd.read_csv(path)
         self.text_column, self.label_column = list(self.dataset.columns)
         self.tokenizer = get_tokenizer("basic_english")
-        self.max_len = max([len(self.tokenizer(text)) for text in self.dataset[self.text_column]])
-        if lenght is not None and lenght < self.max_len:
-            self.max_len = lenght
+        self.max_len = max(
+            [len(self.tokenizer(text)) for text in self.dataset[self.text_column]]
+        )
+        if length is not None and length < self.max_len:
+            self.max_len = length
         self.vocab_to_int = vocab_to_int
         self.start_token = start_token
         self.end_token = end_token
@@ -75,9 +77,9 @@ class EmotionsDataset(GeneralDataset):
         start_token: str = "<s>",
         end_token: str = "<e>",
         pad_token: str = "<unk>",
-        lenght: int = None,
+        length: int | None = None,
     ) -> None:
-        super().__init__(path, vocab_to_int, start_token, end_token, pad_token, lenght)
+        super().__init__(path, vocab_to_int, start_token, end_token, pad_token, length)
 
     def __getitem__(self, index: int) -> tuple[list[str], str]:
         """
@@ -92,7 +94,7 @@ class EmotionsDataset(GeneralDataset):
 
         text = (
             [self.start_token]
-            + self.tokenizer(self.dataset[self.text_column][index])[: self.max_len-2]
+            + self.tokenizer(self.dataset[self.text_column][index])[: self.max_len - 2]
             + [self.end_token]
         )
 
@@ -114,9 +116,9 @@ class IMBDDataset(GeneralDataset):
         start_token: str = "<s>",
         end_token: str = "<e>",
         pad_token: str = "<unk>",
-        lenght: int = None,
+        length: int | None = None,
     ) -> None:
-        super().__init__(path, vocab_to_int, start_token, end_token, pad_token, lenght)
+        super().__init__(path, vocab_to_int, start_token, end_token, pad_token, length)
 
     def __getitem__(self, index: int) -> tuple[list[str], str]:
         """
@@ -131,9 +133,7 @@ class IMBDDataset(GeneralDataset):
 
         text = (
             [self.start_token]
-            + self.tokenizer(
-                self.dataset[self.text_column][index]
-            )[: self.max_len-2]
+            + self.tokenizer(self.dataset[self.text_column][index])[: self.max_len - 2]
             + [self.end_token]
         )
         text = [self.pad_token] * (self.max_len - len(text)) + text
@@ -223,7 +223,7 @@ def load_text_data(
     dataset_name: str,
     batch_size: int = 128,
     num_workers: int = 0,
-    length: int = None,
+    length: int | None = None,
     start_token: str = "<s>",
     end_token: str = "<e>",
     pad_token: str = "<unk>",
@@ -309,6 +309,7 @@ def load_text_data(
         shuffle=True,
         num_workers=num_workers,
         collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+        drop_last=True,
     )
     val_dataloader: DataLoader = DataLoader(
         val_dataset,
@@ -316,6 +317,7 @@ def load_text_data(
         shuffle=True,
         num_workers=num_workers,
         collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+        drop_last=True,
     )
     test_dataloader: DataLoader = DataLoader(
         test_dataset,
@@ -323,6 +325,7 @@ def load_text_data(
         shuffle=True,
         num_workers=num_workers,
         collate_fn=lambda x: collate_fn(x, vocab_to_int, targets_to_int),
+        drop_last=True,
     )
 
     return (
@@ -341,11 +344,17 @@ def load_benchmark_data(
     batch_size: int = 128,
     percent: float = 1,
     num_workers: int = 0,
-    length: int = None,
+    length: int | None = None,
     start_token: str = "<s>",
     end_token: str = "<e>",
     pad_token: str = "<unk>",
-) -> tuple[DataLoader, dict[str, int], dict[int, str], dict[str, int], dict[int, str],]:
+) -> tuple[
+    DataLoader,
+    dict[str, int],
+    dict[int, str],
+    dict[str, int],
+    dict[int, str],
+]:
     """
     This function returns two Dataloaders, one for train data and
     other for validation data for text dataset.

@@ -20,7 +20,15 @@ class LinformerSelfAttention(torch.nn.Module):
     """
     Linformer self-attention module.
     """
-    def __init__(self, embedding_dim=128, sequence_length=68, num_heads=8, dim_head=None, dropout=0.0):
+
+    def __init__(
+        self,
+        embedding_dim=128,
+        sequence_length=68,
+        num_heads=8,
+        dim_head=None,
+        dropout=0.0,
+    ):
         """
         Constructor of the class LinformerSelfAttention.
 
@@ -31,17 +39,19 @@ class LinformerSelfAttention(torch.nn.Module):
             dim_head: dimension of the head.
             dropout: dropout rate.
         """
-        
+
         super().__init__()
-        assert embedding_dim % num_heads == 0, "Dimension must be divisible by the number of heads."
-        
+        assert (
+            embedding_dim % num_heads == 0
+        ), "Dimension must be divisible by the number of heads."
+
         self.sequence_length = sequence_length
         self.num_heads = num_heads
         self.dim_head = (embedding_dim // num_heads) if dim_head is None else dim_head
 
         # l and eps = l is the linformer's dimension of proyection of n (sequence length)
         self.eps = 0.9
-        self.l = int(5*math.log(sequence_length * embedding_dim) / self.eps)
+        self.l = int(5 * math.log(sequence_length * embedding_dim) / self.eps)
 
         # Proyection matrices E and F
         self.sigma = 1 / (2**self.sequence_length)
@@ -56,9 +66,15 @@ class LinformerSelfAttention(torch.nn.Module):
         self.register_buffer("F", torch.exp(-sigma_tensor) * R)
 
         # Initizalize linear layers Q, K, V
-        self.to_q = torch.nn.Linear(embedding_dim, self.dim_head * num_heads, bias=False)
-        self.to_k = torch.nn.Linear(embedding_dim, self.dim_head * num_heads, bias=False)
-        self.to_v = torch.nn.Linear(embedding_dim, self.dim_head * num_heads, bias=False)
+        self.to_q = torch.nn.Linear(
+            embedding_dim, self.dim_head * num_heads, bias=False
+        )
+        self.to_k = torch.nn.Linear(
+            embedding_dim, self.dim_head * num_heads, bias=False
+        )
+        self.to_v = torch.nn.Linear(
+            embedding_dim, self.dim_head * num_heads, bias=False
+        )
 
         # Output linear layer and dropout
         self.to_out = torch.nn.Linear(self.dim_head * num_heads, embedding_dim)
@@ -85,7 +101,7 @@ class LinformerSelfAttention(torch.nn.Module):
                 the channels may be transformed depending on the model configuration.
         """
 
-        b, n, _ = x.shape # (B, N, E)
+        b, n, _ = x.shape  # (B, N, E)
 
         # Apply linear layers Q, K, V -> (B, N, E)
         q: torch.Tensor = self.to_q(x)
@@ -102,14 +118,18 @@ class LinformerSelfAttention(torch.nn.Module):
         v = torch.einsum("bhne,nk->bhke", v, self.F)
 
         # Calculate attention
-        attn_score = torch.matmul(q, k.transpose(-2, -1)) * (self.dim_head**-0.5) # (B, H, N, L)
-        attn_prob = torch.softmax(attn_score, dim=-1) # (B, H, N, L)
-        attn_out = torch.matmul(attn_prob, v) # (B, H, N, E//H)
+        attn_score = torch.matmul(q, k.transpose(-2, -1)) * (
+            self.dim_head**-0.5
+        )  # (B, H, N, L)
+        attn_prob = torch.softmax(attn_score, dim=-1)  # (B, H, N, L)
+        attn_out = torch.matmul(attn_prob, v)  # (B, H, N, E//H)
 
         # Mix heads
-        attn_out = attn_out.transpose(1, 2).reshape(b, n, self.num_heads * self.dim_head) # (B, N, E)
-        attn_out = self.to_out(attn_out) # (B, N, E)
- 
+        attn_out = attn_out.transpose(1, 2).reshape(
+            b, n, self.num_heads * self.dim_head
+        )  # (B, N, E)
+        attn_out = self.to_out(attn_out)  # (B, N, E)
+
         return attn_out
 
 
@@ -131,7 +151,6 @@ class LinformerModel(torch.nn.Module):
         num_heads: int = 4,
         **kwargs,
     ) -> None:
-        
         """
         Initializes the LinformerModel.
 
@@ -144,7 +163,6 @@ class LinformerModel(torch.nn.Module):
             embedding_dim (int, optional): Dimensionality of the embedding layer.
             num_heads (int, optional): Number of attention heads in Linformer.
         """
-        
 
         super().__init__()
         self.vocab_to_int: dict[str, int] = vocab_to_int
@@ -162,7 +180,9 @@ class LinformerModel(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # Linformer self-attention
-        self.self_attention = LinformerSelfAttention(embedding_dim=embedding_dim, num_heads=num_heads)
+        self.self_attention = LinformerSelfAttention(
+            embedding_dim=embedding_dim, num_heads=num_heads
+        )
 
         # mlp
         self.fc = torch.nn.Sequential(
