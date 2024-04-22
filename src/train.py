@@ -9,7 +9,7 @@ import json
 from typing import Literal
 
 # own modules
-from src.models import EncoderModel, KernelizedModel, PytorchModel, LocalModel, LinformerModel, KernelizedLinformerModel, EncoderModelLSH
+from src.models import EncoderModel, KernelizedModel, PytorchModel, LocalModel, LinformerModel, KernelizedLinformerModel, LSHModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -33,7 +33,7 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 NUMBER_OF_CLASSES: int = 6
 
 MODEL_NAME: Literal[
-    "EncoderModel", "PytorchModel", "LocalModel", "KernelizedModel", "LinformerModel", "KernelizedLinformerModel"
+    "EncoderModel", "PytorchModel", "LocalModel", "KernelizedModel", "LinformerModel", "KernelizedLinformerModel", "LSHModel"
 ] = "KernelizedLinformerModel"
 
 
@@ -66,7 +66,7 @@ def main() -> None:
         f"{MODEL_NAME}_{DATASET_NAME}_lr_{params['lr']}_batch_{params['batch_size']}_hidden_{params['hidden_size']}"
         f"_encoders_{params['encoders']}_embedding_{params['embedding_dim']}_heads_{params['num_heads']}"
     )
-    writer: SummaryWriter = SummaryWriter(f"runs/{model_name}/{name}")
+    writer: SummaryWriter = SummaryWriter(f"runs/{MODEL_NAME}/{name}")
 
     # define model
     inputs: torch.Tensor = next(iter(train_data))[0]
@@ -106,4 +106,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main("EncoderModel")
+    main()
