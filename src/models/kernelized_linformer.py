@@ -44,7 +44,7 @@ class KernelizedLinformerAttention(torch.nn.Module):
         embedding_dim: int,
         num_heads: int,
         mapping_dim: int | None = None,
-        seq_len=68,
+        sequence_length=68,
     ) -> None:
         """
         Constructor of the class SelfAttention.
@@ -53,19 +53,20 @@ class KernelizedLinformerAttention(torch.nn.Module):
             embedding_dim: input channels of the module.
             num_heads: number of heads in the multi-head attention.
             mapping_dim: mapping dimension of the kernelized attention.
+            sequence_length: sequence length.
         """
 
         super().__init__()
         self.num_heads = num_heads
         self.embedding_dim = embedding_dim
-        self.seq_len = seq_len
 
         # Linformer parameters
-        self.l = 48 # linformer l dimension of proyection of n (sequence length)
-        self.sigma = 1 / (2**self.seq_len)
+        self.eps = 0.9
+        self.l = int(5*math.log(sequence_length * embedding_dim) / self.eps)  # linformer l dimension of proyection of n (sequence length)
+        self.sigma = 1 / (2**sequence_length)
 
         # Proyection matrices E and F
-        R = torch.randn((self.seq_len, self.l)) / math.sqrt(self.l)
+        R = torch.randn((sequence_length, self.l)) / math.sqrt(self.l)
         R = normalize(R, p=2, dim=1)  # Normalizar R
 
         # Convert sigma to tensor

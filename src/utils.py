@@ -25,6 +25,7 @@ class GeneralDataset(Dataset):
         start_token: str = "<s>",
         end_token: str = "<e>",
         pad_token: str = "<unk>",
+        lenght: int = None,
     ) -> None:
         """
         This is the constructor of the GeneralDataset class.
@@ -41,16 +42,14 @@ class GeneralDataset(Dataset):
         self.path = path
         self.dataset = pd.read_csv(path)
         self.text_column, self.label_column = list(self.dataset.columns)
-        lengths = sorted([len(text.split()) for text in self.dataset[self.text_column]])
-        self.max_len = max(
-            lengths[-1] + 2,  # start and end tokens
-            int(np.median(lengths)),
-        )
+        self.tokenizer = get_tokenizer("basic_english")
+        self.max_len = max([len(self.tokenizer(text)) for text in self.dataset[self.text_column]])
+        if lenght is not None and lenght < self.max_len:
+            self.max_len = lenght
         self.vocab_to_int = vocab_to_int
         self.start_token = start_token
         self.end_token = end_token
         self.pad_token = pad_token
-        self.tokenizer = get_tokenizer("basic_english")
 
     def __len__(self) -> int:
         """
@@ -76,8 +75,9 @@ class EmotionsDataset(GeneralDataset):
         start_token: str = "<s>",
         end_token: str = "<e>",
         pad_token: str = "<unk>",
+        lenght: int = None,
     ) -> None:
-        super().__init__(path, vocab_to_int, start_token, end_token, pad_token)
+        super().__init__(path, vocab_to_int, start_token, end_token, pad_token, lenght)
 
     def __getitem__(self, index: int) -> tuple[list[str], str]:
         """
@@ -92,9 +92,10 @@ class EmotionsDataset(GeneralDataset):
 
         text = (
             [self.start_token]
-            + self.tokenizer(self.dataset[self.text_column][index])
+            + self.tokenizer(self.dataset[self.text_column][index])[: self.max_len-2]
             + [self.end_token]
-        )[: self.max_len]
+        )
+
         text = [self.pad_token] * (self.max_len - len(text)) + text
         label = self.dataset[self.label_column][index]
         return text, label
@@ -113,8 +114,9 @@ class IMBDDataset(GeneralDataset):
         start_token: str = "<s>",
         end_token: str = "<e>",
         pad_token: str = "<unk>",
+        lenght: int = None,
     ) -> None:
-        super().__init__(path, vocab_to_int, start_token, end_token, pad_token)
+        super().__init__(path, vocab_to_int, start_token, end_token, pad_token, lenght)
 
     def __getitem__(self, index: int) -> tuple[list[str], str]:
         """
@@ -130,10 +132,10 @@ class IMBDDataset(GeneralDataset):
         text = (
             [self.start_token]
             + self.tokenizer(
-                self.dataset[self.text_column][index].replace("<br />", "")
-            )
+                self.dataset[self.text_column][index]
+            )[: self.max_len-2]
             + [self.end_token]
-        )[: self.max_len]
+        )
         text = [self.pad_token] * (self.max_len - len(text)) + text
         label = self.dataset[self.label_column][index]
         return text, label
@@ -221,6 +223,7 @@ def load_text_data(
     dataset_name: str,
     batch_size: int = 128,
     num_workers: int = 0,
+    length: int = None,
     start_token: str = "<s>",
     end_token: str = "<e>",
     pad_token: str = "<unk>",
@@ -285,11 +288,11 @@ def load_text_data(
     # create datasets
     if dataset_name == "emotions":
         train_dataset = EmotionsDataset(
-            csv_path, vocab_to_int, start_token, end_token, pad_token
+            csv_path, vocab_to_int, start_token, end_token, pad_token, length
         )
     elif dataset_name == "imdb":
         train_dataset = IMBDDataset(
-            csv_path, vocab_to_int, start_token, end_token, pad_token
+            csv_path, vocab_to_int, start_token, end_token, pad_token, length
         )
     else:
         raise ValueError("Dataset class not found")
@@ -338,6 +341,7 @@ def load_benchmark_data(
     batch_size: int = 128,
     percent: float = 1,
     num_workers: int = 0,
+    length: int = None,
     start_token: str = "<s>",
     end_token: str = "<e>",
     pad_token: str = "<unk>",
@@ -377,7 +381,7 @@ def load_benchmark_data(
     words = [
         word
         for text in dataset[text_column]
-        for word in get_tokenizer("basic_english")(text.replace("<br />", ""))
+        for word in get_tokenizer("basic_english")(text)
     ]
     vocab_to_int, int_to_vocab = create_lookup_tables(
         words, start_token, end_token, pad_token
@@ -388,7 +392,7 @@ def load_benchmark_data(
 
     # create datasets
     train_dataset: Dataset = IMBDDataset(
-        csv_path, vocab_to_int, start_token, end_token, pad_token
+        csv_path, vocab_to_int, start_token, end_token, pad_token, length
     )
 
     assert (

@@ -40,8 +40,8 @@ class LinformerSelfAttention(torch.nn.Module):
         self.dim_head = (embedding_dim // num_heads) if dim_head is None else dim_head
 
         # l and eps = l is the linformer's dimension of proyection of n (sequence length)
-        self.eps = 0.1
-        self.l = int(9*math.log(embedding_dim) / 0.9)
+        self.eps = 0.9
+        self.l = int(5*math.log(sequence_length * embedding_dim) / self.eps)
 
         # Proyection matrices E and F
         self.sigma = 1 / (2**self.sequence_length)

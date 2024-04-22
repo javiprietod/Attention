@@ -18,7 +18,8 @@ from src.models import (
     LocalAttention,
     LocalAttentionUnFold,
     LinformerSelfAttention,
-    KernelizedLinformerAttention
+    KernelizedLinformerAttention,
+    LSHmodule,
 )
 
 # set device
@@ -41,6 +42,8 @@ torch.set_num_threads(8)
 DATA_PATH: str = "data"
 
 EMBEDDING_DIM: int = 128
+BATCH_SIZE: int = 16
+LENGTH: int = None # If None, the length of the longest sentence is used
 NUM_CLASSES: int = 2
 
 
@@ -178,8 +181,9 @@ if __name__ == "__main__":
     vocab_to_int: dict[str, int]
     data, vocab_to_int, _, __, _ = load_benchmark_data(
         DATA_PATH,
-        batch_size=16,
+        batch_size=BATCH_SIZE,
         percent=0.005,
+        length=LENGTH,
     )
     sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
@@ -191,6 +195,7 @@ if __name__ == "__main__":
         # torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
         # LinformerSelfAttention(EMBEDDING_DIM, sequence_length, 4),
         # KernelizedLinformerAttention(EMBEDDING_DIM, num_heads=4, mapping_dim=EMBEDDING_DIM//2, seq_len=sequence_length),
+        # LSHmodule(EMBEDDING_DIM, 4, 4),
         data=data,
         vocab_to_int=vocab_to_int,
     )
