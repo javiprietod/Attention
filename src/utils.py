@@ -348,13 +348,7 @@ def load_benchmark_data(
     start_token: str = "<s>",
     end_token: str = "<e>",
     pad_token: str = "<unk>",
-) -> tuple[
-    DataLoader,
-    dict[str, int],
-    dict[int, str],
-    dict[str, int],
-    dict[int, str],
-]:
+) -> tuple[DataLoader, dict[str, int], dict[int, str], dict[str, int], dict[int, str],]:
     """
     This function returns two Dataloaders, one for train data and
     other for validation data for text dataset.

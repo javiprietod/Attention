@@ -3,7 +3,6 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import tqdm
 
 # own modules
 from src.utils import Accuracy, print_confusion_matrix
@@ -37,9 +36,7 @@ def train_step(
     model.train()
     accuracy = Accuracy()
 
-    iterator = train_data if len(train_data) < 400 else tqdm(train_data)
-
-    for text, label in iterator:
+    for text, label in train_data:
         accuracy.reset()
         text = text.to(device)
         label = label.to(device)
