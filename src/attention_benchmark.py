@@ -195,7 +195,7 @@ if __name__ == "__main__":
         # torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
         # LinformerSelfAttention(EMBEDDING_DIM, sequence_length, 4),
         # KernelizedLinformerAttention(EMBEDDING_DIM, num_heads=4, mapping_dim=EMBEDDING_DIM//2, seq_len=sequence_length),
-        LSHAttention(EMBEDDING_DIM, 4, 4),
+        # LSHAttention(EMBEDDING_DIM, 4, 4),
         data=data,
         vocab_to_int=vocab_to_int,
     )
