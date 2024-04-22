@@ -13,13 +13,13 @@ from src.utils import (
 )
 from src.models import (
     SelfAttention,
-    PositionalEncoding, LSHmodule,
+    PositionalEncoding,
     KernelizedAttention,
     LocalAttention,
     LocalAttentionUnFold,
     LinformerSelfAttention,
     KernelizedLinformerAttention,
-    LSHmodule,
+    LSHAttention,
 )
 
 # set device
@@ -188,7 +188,6 @@ if __name__ == "__main__":
     sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
-        LSHmodule(EMBEDDING_DIM, 4, 128),
         SelfAttention(EMBEDDING_DIM, 4),
         # KernelizedAttention(EMBEDDING_DIM, 4, 0),
         # LocalAttention(EMBEDDING_DIM, 4, 7),
@@ -196,7 +195,7 @@ if __name__ == "__main__":
         # torch.nn.MultiheadAttention(EMBEDDING_DIM, 4),
         # LinformerSelfAttention(EMBEDDING_DIM, sequence_length, 4),
         # KernelizedLinformerAttention(EMBEDDING_DIM, num_heads=4, mapping_dim=EMBEDDING_DIM//2, seq_len=sequence_length),
-        # LSHmodule(EMBEDDING_DIM, 4, 4),
+        LSHAttention(EMBEDDING_DIM, 4, 4),
         data=data,
         vocab_to_int=vocab_to_int,
     )
