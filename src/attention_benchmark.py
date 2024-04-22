@@ -13,7 +13,7 @@ from src.utils import (
 )
 from src.models import (
     SelfAttention,
-    PositionalEncoding,
+    PositionalEncoding, LSHmodule,
     KernelizedAttention,
     LocalAttention,
     LocalAttentionUnFold,
@@ -188,6 +188,7 @@ if __name__ == "__main__":
     sequence_length: torch.Tensor = next(iter(data))[0].shape[1]
 
     main(
+        LSHmodule(EMBEDDING_DIM, 4, 128),
         SelfAttention(EMBEDDING_DIM, 4),
         # KernelizedAttention(EMBEDDING_DIM, 4, 0),
         # LocalAttention(EMBEDDING_DIM, 4, 7),

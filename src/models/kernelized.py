@@ -83,27 +83,27 @@ class KernelizedAttention(torch.nn.Module):
         q = q / torch.norm(q)
         k = k / torch.norm(k)
 
-        # phi_q, phi_k: FROM [B, N, H, E//N] TO [B, N, H, M]
+        # phi_q, phi_k: FROM [B, N, H, E//H] TO [B, N, H, M//H]
         phi_q = self.phi(q)
         phi_k = self.phi(k)
 
-        # phi_q, phi_k: FROM [B, N, H, M] TO [B, H, N, M]
+        # phi_q, phi_k: FROM [B, N, H, M//H] TO [B, H, N, M//H]
         phi_q = phi_q.transpose(1, 2)
         phi_k = phi_k.transpose(1, 2)
 
-        # v: FROM [B, N, H, E//N] TO [B, H, N, E//H]
+        # v: FROM [B, N, H, E//H] TO [B, H, N, E//H]
         v = v.transpose(1, 2)
 
-        # A2: [B, H, N, M]
+        # A2: [B, H, N, M//H]
         A2 = phi_k
 
-        # A1: [B, H, N, M] x [B, H, N, E//H] = [B, H, N, M, E//H]
+        # A1: [B, H, N, M//H] x [B, H, N, E//H] = [B, H, N, M//H, E//H]
         A1 = torch.einsum("...d,...e->...de", phi_k, v)
 
-        # num: [B, H, N, M] x [B, H, N, M, E//H] = [B, H, N, E//H]
+        # num: [B, H, N, M//H] x [B, H, N, M//H, E//H] = [B, H, N, E//H]
         num = torch.einsum("abcd,abcde->abce", phi_q, A1)
 
-        # den: [B, H, N, M] x [B, H, N, M] = [B, H, N]
+        # den: [B, H, N, M//H] x [B, H, N, M//H] = [B, H, N]
         den = torch.einsum("abcd,abcd->abc", phi_q, A2).unsqueeze(-1)
 
         # output: [B, H, N, E//H]
@@ -131,13 +131,13 @@ class KernelizedAttention(torch.nn.Module):
         """
         norm_x = torch.norm(x)
 
-        # w: [H, M, E//H]
+        # w: [H, M//H, E//H]
         # x: [B, N, H, E//H]
         output: torch.Tensor = torch.exp(
             torch.einsum("abc,deac->deab", self.weights, x)
         )
 
-        # output: [B, N, H, M]
+        # output: [B, N, H, M//H]
         output = output * torch.exp(-(norm_x**2) / 2) / math.sqrt(self.mapping_dim)
 
         return output

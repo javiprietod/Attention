@@ -5,7 +5,7 @@ import torch.nn.functional as F
 # other libraries
 import math
 
-class LSHmodule(torch.nn.Module):
+class LSHAttention(torch.nn.Module):
 
     """
     LSH attention module.
@@ -148,7 +148,7 @@ class PositionalEncoding(torch.nn.Module):
         x = x + self.pe[: x.size(0)]
         return self.dropout(x)
 
-class EncoderModelLSH(torch.nn.Module):
+class LSHModel(torch.nn.Module):
     """
     Model constructed used Block modules.
     """
@@ -189,7 +189,7 @@ class EncoderModelLSH(torch.nn.Module):
         self.normalization = torch.nn.LayerNorm(embedding_dim)
 
         # self-attention
-        self.self_attention = LSHmodule(embedding_dim, num_heads, n_buckets)
+        self.self_attention = LSHAttention(embedding_dim, num_heads, n_buckets)
 
         # mlp
         self.fc = torch.nn.Sequential(

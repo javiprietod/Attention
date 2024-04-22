@@ -9,7 +9,7 @@ import json
 from typing import Literal
 
 # own modules
-from src.models import EncoderModel, KernelizedModel, PytorchModel, LocalModel, LinformerModel, KernelizedLinformerModel
+from src.models import EncoderModel, KernelizedModel, PytorchModel, LocalModel, LinformerModel, KernelizedLinformerModel, LSHModel
 from src.utils import (
     load_text_data,
     save_model,
@@ -33,7 +33,7 @@ DATASET_NAME: Literal["emotions", "imdb"] = "emotions"
 NUMBER_OF_CLASSES: int = 6
 
 MODEL_NAME: Literal[
-    "EncoderModel", "PytorchModel", "LocalModel", "KernelizedModel", "LinformerModel", "KernelizedLinformerModel"
+    "EncoderModel", "PytorchModel", "LocalModel", "KernelizedModel", "LinformerModel", "KernelizedLinformerModel", "LSHModel"
 ] = "KernelizedLinformerModel"
 
 
