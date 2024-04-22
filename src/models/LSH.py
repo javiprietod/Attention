@@ -67,7 +67,7 @@ class LSHAttention(torch.nn.Module):
 
         # Calculate the dot product between the embeddings and the hyperplanes, then threshold to get the buckets
         # Size: [B, N, H, n_hyperplanes]
-        buckets = torch.einsum('bnhe,ey->bnhy', x, self.hyperplanes)
+        buckets = torch.einsum("bnhe,ey->bnhy", x, self.hyperplanes)
         buckets = (buckets >= 0).to(torch.float32)
 
         # Convert the binary representation of the buckets to decimal
@@ -111,11 +111,11 @@ class LSHAttention(torch.nn.Module):
 
         # One hot encode the vectors to the bucket it's on [C, B, N, H]
         one_hot_buckets = F.one_hot(buckets.long(), num_classes=self.n_buckets).int()
-        one_hot_buckets = torch.einsum('bnhc->cbhn',one_hot_buckets)
+        one_hot_buckets = torch.einsum("bnhc->cbhn", one_hot_buckets)
 
         # Multiply the vectors in the same bucket [C, B, H, E/H, E/H]
-        q = q.masked_fill(one_hot_buckets.to(torch.bool).unsqueeze(4),0)
-        attention = torch.matmul(q,q.transpose(3,4)) / math.sqrt(self.embedding_dim)
+        q = q.masked_fill(one_hot_buckets.to(torch.bool).unsqueeze(4), 0)
+        attention = torch.matmul(q, q.transpose(3, 4)) / math.sqrt(self.embedding_dim)
 
         # Remove the bucket dimension and apply softmax [B, H, N, N]
         attention = torch.sum(attention, dim=0)
